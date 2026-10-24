@@ -1,0 +1,593 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', Meiryo, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+html.presentation body {
+  font-size: 21px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- 全体の配置 ---- */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  margin: 0 8px 0 0;
+  font-size: 1.15em;
+  letter-spacing: 0.04em;
+}
+
+.panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  padding: 10px 16px;
+}
+
+.app.wide .panes {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.side,
+.tabbed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.side .vector-pane {
+  flex: 1 1 auto;
+}
+
+.side .table-pane {
+  flex: 0 0 auto;
+}
+
+.tabbed > .pane {
+  flex: 1;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pane-head h2 {
+  margin: 0;
+  font-size: 1em;
+  white-space: nowrap;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.scene-box,
+.vector-box {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.scene-svg,
+.vector-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.svg-label {
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.handle {
+  cursor: grab;
+}
+
+.handle:active {
+  cursor: grabbing;
+}
+
+/* ---- ② ベクトル図 ---- */
+.vector-svg {
+  background: var(--panel);
+}
+
+.grid-thin {
+  stroke: var(--vgrid);
+  stroke-width: 1;
+}
+
+.grid-strong {
+  stroke: var(--vgrid-strong);
+  stroke-width: 1;
+}
+
+.grid-axis {
+  stroke: var(--vaxis);
+  stroke-width: 1.5;
+}
+
+.tick {
+  fill: var(--muted);
+}
+
+.origin {
+  fill: var(--text);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+/* ---- ③ 成分表 ---- */
+.table-box {
+  padding: 6px 10px 2px;
+  overflow-x: auto;
+}
+
+.comp-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.comp-table th,
+.comp-table td {
+  padding: 3px 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.comp-table thead th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.comp-table tbody th {
+  text-align: left;
+}
+
+.sym {
+  font-weight: 700;
+  font-size: 1.1em;
+  margin-right: 6px;
+}
+
+.row-name {
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.sign {
+  width: 1.2em;
+  font-weight: 700;
+}
+
+.sum-rule td {
+  padding: 0;
+  border-top: 2px solid var(--text);
+}
+
+.row-sum .sym {
+  font-size: 1.2em;
+}
+
+.c-v1 {
+  color: var(--c-v1);
+}
+
+.c-v2 {
+  color: var(--c-v2);
+}
+
+.c-v {
+  color: var(--c-v);
+}
+
+.cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cell input {
+  width: 3.2em;
+  padding: 3px 4px;
+  text-align: right;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.cell input.invalid {
+  border-color: var(--c-v);
+}
+
+.cell-ro {
+  display: inline-block;
+  min-width: 3.2em;
+  padding: 3px 4px;
+  text-align: right;
+  font-weight: 700;
+  margin-left: calc(1.9em + 3px);
+}
+
+.sign-btn {
+  min-width: 1.9em;
+  padding: 2px 4px;
+}
+
+.mag {
+  color: var(--muted);
+}
+
+.table-notice {
+  min-height: 1.5em;
+  margin: 2px 0 4px;
+  font-size: 0.85em;
+  color: var(--c-v2);
+}
+
+/* ---- ボタン類 ---- */
+.btn {
+  border: 1px solid var(--border);
+  background: var(--btn);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  line-height: 1.3;
+  min-height: 34px;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--btn-hover);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn[aria-pressed='true'] {
+  background: var(--btn-on);
+  color: var(--btn-on-text);
+  border-color: var(--btn-on);
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--c-v1);
+  filter: brightness(0.92);
+}
+
+.btn.icon {
+  min-width: 34px;
+  padding: 4px 6px;
+}
+
+.btn.primary {
+  background: var(--c-v1);
+  border-color: var(--c-v1);
+  color: #fff;
+  font-weight: 700;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seg-btn {
+  border: 0;
+  background: var(--btn);
+  padding: 5px 12px;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--border);
+}
+
+.seg-btn[aria-pressed='true'] {
+  background: var(--btn-on);
+  color: var(--btn-on-text);
+}
+
+.seg-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+select {
+  border: 1px solid var(--border);
+  background: var(--btn);
+  border-radius: 8px;
+  padding: 5px 8px;
+  min-height: 34px;
+  max-width: 100%;
+}
+
+.preset select {
+  max-width: 22em;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+}
+
+.ctl-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.ctl-label {
+  font-size: 0.85em;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.stepper-value {
+  min-width: 4em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-body {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 15em;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.where {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* ---- 操作バー・フィードバック欄 ---- */
+.playbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.play {
+  min-width: 8.5em;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+.statusbar {
+  margin: 0;
+  padding: 6px 16px 10px;
+  background: var(--panel);
+  color: var(--muted);
+  min-height: 2.6em;
+}
+
+/* ---- 狭い画面のタブ ---- */
+.tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab {
+  flex: 1;
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--btn);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  background: var(--btn-on);
+  color: var(--btn-on-text);
+}
+
+.dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-v);
+}
+
+@media (max-width: 599px) {
+  .app-header,
+  .panes,
+  .playbar,
+  .statusbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .app-title {
+    font-size: 1.05em;
+  }
+  .preset select {
+    max-width: 14em;
+  }
+}
+
+/* 横長でも高さが足りない端末では全体をスクロールさせる */
+@media (max-height: 520px) {
+  .app {
+    height: auto;
+  }
+  .app.wide .panes {
+    min-height: 480px;
+  }
+}
+
+/* 縦長の狭い画面：ページ全体をスクロールさせ、各窓に十分な高さを与える */
+.app.narrow {
+  height: auto;
+}
+
+.app.narrow .panes {
+  display: flex;
+  flex-direction: column;
+}
+
+.app.narrow .scene-box {
+  flex: none;
+  height: var(--scene-h, 300px);
+}
+
+.app.narrow .tabbed > .pane {
+  flex: none;
+}
+
+.app.narrow .vector-box {
+  flex: none;
+  height: min(86vw, 420px);
+}
+
+.app.narrow .playbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}

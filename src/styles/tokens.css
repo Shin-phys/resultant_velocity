@@ -1,0 +1,104 @@
+/*
+ * 色トークン（仕様 02 §3）。v₁＝青、v₂＝緑、v＝赤 を全窓で共通に使う。
+ * 色だけに頼らず、矢印には必ず記号を添えること。
+ */
+:root {
+  color-scheme: light;
+  --c-v1: #2563eb;
+  --c-v2: #0d9a6b;
+  --c-v: #dc2626;
+  --c-pred: #6b7280;
+
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1f2933;
+  --muted: #5f6b7a;
+  --border: #d6dbe1;
+  --btn: #eef1f5;
+  --btn-hover: #e2e7ee;
+  --btn-on: #1f2933;
+  --btn-on-text: #ffffff;
+  --focus: #2563eb;
+
+  --land: #eef0e6;
+  --water: #d7ebf7;
+  --sheet-line: rgba(37, 99, 235, 0.18);
+  --leaf: #6aa84f;
+  --bank: #7a6a4f;
+  --grid: rgba(31, 41, 51, 0.07);
+  --grid-strong: rgba(31, 41, 51, 0.18);
+  --boat: #f4c76b;
+  --boat-edge: #6b4f1d;
+
+  --vgrid: #e3e7ec;
+  --vgrid-strong: #c4ccd5;
+  --vaxis: #5f6b7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --c-v1: #6b9bff;
+    --c-v2: #34d39a;
+    --c-v: #ff6b6b;
+    --c-pred: #9aa5b1;
+
+    --bg: #12161c;
+    --panel: #1b2129;
+    --text: #e6e9ee;
+    --muted: #9aa5b1;
+    --border: #2e3742;
+    --btn: #26303b;
+    --btn-hover: #303b48;
+    --btn-on: #e6e9ee;
+    --btn-on-text: #12161c;
+    --focus: #6b9bff;
+
+    --land: #1d231c;
+    --water: #16303f;
+    --sheet-line: rgba(107, 155, 255, 0.2);
+    --leaf: #7fbf62;
+    --bank: #a8946f;
+    --grid: rgba(230, 233, 238, 0.06);
+    --grid-strong: rgba(230, 233, 238, 0.16);
+    --boat: #e0b45a;
+    --boat-edge: #3a2a0c;
+
+    --vgrid: #252d37;
+    --vgrid-strong: #3a4552;
+    --vaxis: #9aa5b1;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --c-v1: #6b9bff;
+  --c-v2: #34d39a;
+  --c-v: #ff6b6b;
+  --c-pred: #9aa5b1;
+
+  --bg: #12161c;
+  --panel: #1b2129;
+  --text: #e6e9ee;
+  --muted: #9aa5b1;
+  --border: #2e3742;
+  --btn: #26303b;
+  --btn-hover: #303b48;
+  --btn-on: #e6e9ee;
+  --btn-on-text: #12161c;
+  --focus: #6b9bff;
+
+  --land: #1d231c;
+  --water: #16303f;
+  --sheet-line: rgba(107, 155, 255, 0.2);
+  --leaf: #7fbf62;
+  --bank: #a8946f;
+  --grid: rgba(230, 233, 238, 0.06);
+  --grid-strong: rgba(230, 233, 238, 0.16);
+  --boat: #e0b45a;
+  --boat-edge: #3a2a0c;
+
+  --vgrid: #252d37;
+  --vgrid-strong: #3a4552;
+  --vaxis: #9aa5b1;
+}
