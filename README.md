@@ -10,7 +10,19 @@
 
 教師の提示に使う**探究モード**（3窓が自動連動）と、生徒が欠けた表現を自分で作る**練習モード**（非連動・答え合わせで連動）がある。
 
-> 現在は仕様書の段階。実装はこれから。
+> 現在はフェーズ1（探究モード）まで実装済み。練習モードはフェーズ2で追加する。
+
+## 開発
+
+```bash
+npm install
+npm run dev          # 開発サーバー
+npm test             # model の単体テスト（Vitest）
+npm run build        # GitHub Pages 用のビルド（dist/）
+npm run build:single # 1ファイルの試用版（dist-single/index.html）
+```
+
+main に push すると GitHub Actions がテストとビルドを行い、GitHub Pages に公開する（リポジトリの Settings → Pages で Source を「GitHub Actions」にしておく）。
 
 ## 仕様書
 
