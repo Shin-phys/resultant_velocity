@@ -77,7 +77,7 @@ export function TableView() {
             <tr className="sum-rule" aria-hidden="true">
               <td colSpan={5} />
             </tr>
-            <Row sign="" sym="v" name="合成（地面に対して）" cls="c-v" vec={v} readOnly strong />
+            <Row sign="" sym="v" name="合成（地面に対して）" cls="c-v" vec={v} readOnly strong hidden={!s.vShown} />
           </tbody>
         </table>
         <p className="table-notice" role="status" aria-live="polite">
@@ -96,9 +96,11 @@ function Row(props: {
   vec: Vec;
   readOnly?: boolean;
   strong?: boolean;
+  /** 値を伏せて「？」を出す（合成速度 v を出す前） */
+  hidden?: boolean;
   onSet?: (i: 0 | 1, n: number) => void;
 }) {
-  const { sign, sym, name, cls, vec, readOnly, strong, onSet } = props;
+  const { sign, sym, name, cls, vec, readOnly, strong, hidden, onSet } = props;
   return (
     <tr className={strong ? 'row-sum' : undefined}>
       <td className="sign">{sign}</td>
@@ -109,13 +111,13 @@ function Row(props: {
       {([0, 1] as const).map((i) => (
         <td key={i}>
           {readOnly ? (
-            <span className={`cell-ro ${cls}`}>{formatComponent(vec[i])}</span>
+            <span className={`cell-ro ${cls}`}>{hidden ? '？' : formatComponent(vec[i])}</span>
           ) : (
             <Cell value={vec[i]} label={`${sym} の ${i === 0 ? 'x' : 'y'} 成分`} onCommit={(n) => onSet?.(i, n)} />
           )}
         </td>
       ))}
-      <td className="mag">{formatLength(vec)}</td>
+      <td className="mag">{hidden ? '？' : formatLength(vec)}</td>
     </tr>
   );
 }

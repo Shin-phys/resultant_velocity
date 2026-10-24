@@ -7,7 +7,9 @@ export function StatusBar() {
   const f = s.sim.finished;
   let msg: string;
 
-  if (s.status === 'idle') {
+  if (s.status === 'idle' && !s.vShown) {
+    msg = 'どこに着くか予想してから ▶ で再生。合成速度 v は再生のあとに出ます。';
+  } else if (s.status === 'idle') {
     msg = '矢印の先の丸をドラッグするか、③に数を入れると、v₁（物体の速度）と v₂（流れの速度）が変わります。▶ で再生。';
   } else if (s.status === 'playing') {
     msg = '再生中… 青い点線は水に対して通った跡、赤い線は地面に対して通った跡です。';
@@ -38,6 +40,9 @@ export function StatusBar() {
   } else {
     msg = '';
   }
+
+  // v を出した直後は、赤い跡と v の向きを見比べるよう促す
+  if (f && f.reason !== 'noCross' && f.reason !== 'limit') msg += ' 赤い矢印 v（合成速度）と赤い跡の向きを見比べよう。';
 
   return (
     <p className="statusbar" role="status" aria-live="polite">

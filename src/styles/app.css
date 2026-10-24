@@ -356,6 +356,15 @@ input {
   filter: brightness(0.92);
 }
 
+.btn.small {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: 0.85em;
+  border-color: var(--c-v);
+  color: var(--c-v);
+  font-weight: 700;
+}
+
 .btn.icon {
   min-width: 34px;
   padding: 4px 6px;

@@ -29,6 +29,10 @@ function Layout() {
   const s = useAppState();
   const dispatch = useDispatch();
   useContinuousPlayback(s.status, dispatch);
+  // 再生が終わったら合成速度 v を出す（仕様 06「合成速度 v を出すタイミング」）
+  useEffect(() => {
+    if (s.status === 'finished' && !s.vShown) dispatch({ type: 'revealV', at: performance.now() });
+  }, [s.status, s.vShown, dispatch]);
   const narrow = useMediaQuery(NARROW_QUERY);
   const [tab, setTab] = useState<Tab>('vector');
   const [dirty, setDirty] = useState<Record<Tab, boolean>>({ vector: false, table: false });

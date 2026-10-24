@@ -3,6 +3,7 @@ import { acrossAxis, banks, FLOW_UNIT } from '../../model/kinematics';
 import { fitAspect, viewportFor } from '../../model/viewport';
 import { add, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { riverSkin } from '../../skins/river';
+import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
 import { Handle } from '../common/Handle';
 import { Arrow, fy, useElementSize } from '../common/svg';
@@ -23,6 +24,8 @@ export function SceneView() {
   const v2 = v2Of(s);
   const v = add(v1, v2);
   const { sim, goal, flowDir, display } = s;
+  // 合成速度 v は再生が終わるまで出さない（仕様 06「合成速度 v を出すタイミング」）
+  const phase = useRevealPhase(s.vShown, s.revealAt);
   const a = acrossAxis(flowDir);
   const b = (1 - a) as 0 | 1;
   const [lo, hi] = banks(goal);
@@ -259,17 +262,19 @@ export function SceneView() {
           {display.sceneArrows && (
             <g>
               <Arrow from={add(sim.pos, offV2)} to={v2Tip} color="var(--c-v2)" width={3 * k} head={head} label="v₂" fontSize={font} labelShift={shiftV2} />
-              <Arrow from={sim.pos} to={v1Tip} color="var(--c-v1)" width={3 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} />
-              <Arrow
-                from={add(sim.pos, offV)}
-                to={add(add(sim.pos, v), offV)}
-                color="var(--c-v)"
-                width={4 * k}
-                head={head * 1.1}
-                label="v"
-                fontSize={font}
-                labelShift={shiftV}
-              />
+              <Arrow from={sim.pos} to={v1Tip} color="var(--c-v1)" width={3 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={nrm ? add(add(sim.pos, scale(v1, 0.5)), scale(nrm, font * 1.2)) : undefined} />
+              {phase.draw > 0 && (
+                <Arrow
+                  from={add(sim.pos, offV)}
+                  to={add(add(sim.pos, scale(v, phase.draw)), offV)}
+                  color="var(--c-v)"
+                  width={4 * k}
+                  head={head * 1.1}
+                  label={phase.draw >= 1 ? 'v' : undefined}
+                  fontSize={font}
+                  labelShift={shiftV}
+                />
+              )}
               <Handle at={v2Handle} r={px(11)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れの速度）を変える。上下左右にだけ動く" />
               <Handle at={v1Tip} r={px(11)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁（物体の速度）を変える" />
             </g>

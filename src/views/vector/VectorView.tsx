@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { axisAlign, FLOW_UNIT } from '../../model/kinematics';
 import { add, clampBox, formatLength, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
+import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
 import { Handle } from '../common/Handle';
 import { Arrow, outsideMidpoint, useElementSize } from '../common/svg';
@@ -12,7 +13,11 @@ const PAD = 1.2;
 /** 矢印が重なるときにずらす量 [マス] */
 const OFFSET = 0.35;
 
-/** ② ベクトル図ビュー（仕様 04）。探究モードでは「つなぐ方式」で固定表示する。 */
+/**
+ * ② ベクトル図ビュー（仕様 04）。探究モードでは「つなぐ方式」で表示する。
+ * 合成速度 v を隠している間は v₁ と v₂ をどちらも原点から描き、v を出すときに
+ * v₂ が v₁ の先端まで滑ってから v が伸びる（仕様 06「合成速度 v を出すタイミング」）。
+ */
 export function VectorView() {
   const s = useAppState();
   const dispatch = useDispatch();
@@ -23,6 +28,11 @@ export function VectorView() {
   const v1 = s.v1;
   const v2 = v2Of(s);
   const v = add(v1, v2);
+  const phase = useRevealPhase(s.vShown, s.revealAt);
+  const done = s.vShown && phase.draw >= 1;
+  /** v₂ の始点：隠している間は原点、出すときに v₁ の先端へ滑る */
+  const v2Base: Vec = scale(v1, phase.slide);
+  const v2End = add(v2Base, v2);
 
   // 方眼の範囲：矢印が収まる大きさ。ドラッグ中は固定する
   const needed = Math.max(GRID_MIN, ...[...v1, ...v2, ...v].map((c) => Math.abs(c) + 1));
@@ -55,23 +65,24 @@ export function VectorView() {
   const shiftV: Vec | undefined = nrm ? scale(nrm, -font * 1.3) : undefined;
   // 三角形になるときは、各辺の中点の外側にラベルを置く（先端どうしが重なってもラベルは重ならない）
   const centroid: Vec = [(v1[0] + v[0]) / 3, (v1[1] + v[1]) / 3];
-  const lab = (from: Vec, to: Vec): Vec | undefined => (nrm ? undefined : outsideMidpoint(from, to, centroid, font * 0.9));
+  const lab = (from: Vec, to: Vec): Vec | undefined =>
+    nrm || !done ? undefined : outsideMidpoint(from, to, centroid, font * 0.9);
 
   // v₂ = 0 のときのつまみ：v₁ の先から流れの向き（v₁ と平行ならその横）に少し離して置く
   const flowU = FLOW_UNIT[s.flowDir];
   const zeroDir: Vec = isParallel(flowU, v1) && nrm ? nrm : flowU;
-  const v2Handle: Vec = isZero(v2) ? add(v1, scale(zeroDir, 0.9)) : add(v, offV2);
+  const v2Handle: Vec = isZero(v2) ? add(v2Base, scale(zeroDir, 0.9)) : add(v2End, offV2);
 
   const freeze = { onStart: () => setFrozenR(needed), onEnd: () => setFrozenR(null) };
   const dragV1 = useTipDrag(svgRef, () => v1, (p) => dispatch({ type: 'setV1', v: clampBox(snap(p), R) }), freeze);
   const dragV2 = useTipDrag(
     svgRef,
-    () => v,
+    () => v2End,
     (p) => {
-      const d = axisAlign(snap(sub(p, v1)));
-      // 先端（v₁ + v₂）が方眼からはみ出さないようにする
-      const tip = clampBox(add(v1, d), R);
-      dispatch({ type: 'setV2', v: axisAlign(sub(tip, v1)) });
+      const d = axisAlign(snap(sub(p, v2Base)));
+      // 先端が方眼からはみ出さないようにする
+      const tip = clampBox(add(v2Base, d), R);
+      dispatch({ type: 'setV2', v: axisAlign(sub(tip, v2Base)) });
     },
     freeze,
   );
@@ -83,11 +94,16 @@ export function VectorView() {
       <header className="pane-head">
         <h2>② ベクトル図</h2>
         <span className="hint">1マス＝1 m/s</span>
+        {!s.vShown && (
+          <button className="btn small" onClick={() => dispatch({ type: 'revealV', at: performance.now() })}>
+            v を表示
+          </button>
+        )}
         {magnitudes && (
           <span className="mags" aria-label="大きさ">
             <span className="c-v1">|v₁| = {formatLength(v1)}</span>
             <span className="c-v2">|v₂| = {formatLength(v2)}</span>
-            <span className="c-v">|v| = {formatLength(v)}</span>
+            <span className="c-v">|v| = {s.vShown ? formatLength(v) : '？'}</span>
           </span>
         )}
       </header>
@@ -124,24 +140,46 @@ export function VectorView() {
           {components && (
             <g>
               <ComponentLines vec={v1} color="var(--c-v1)" />
-              <ComponentLines vec={v} color="var(--c-v)" />
+              {s.vShown && <ComponentLines vec={v} color="var(--c-v)" />}
             </g>
           )}
 
           {/* 平行四辺形の並べ方（v₂ を原点から、v₁ を v₂ の先から） */}
-          {parallelogram && !isZero(v2) && !nrm && (
+          {parallelogram && done && !isZero(v2) && !nrm && (
             <g>
               <Arrow from={[0, 0]} to={v2} color="var(--c-v2)" width={2 * k} head={head} dashed opacity={0.6} />
               <Arrow from={v2} to={v} color="var(--c-v1)" width={2 * k} head={head} dashed opacity={0.6} />
             </g>
           )}
 
-          <Arrow from={[0, 0]} to={v1} color="var(--c-v1)" width={3.5 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={lab([0, 0], v1)} />
-          <Arrow from={add(v1, offV2)} to={add(v, offV2)} color="var(--c-v2)" width={3.5 * k} head={head} label="v₂" fontSize={font} labelShift={shiftV2} labelAt={lab(v1, v)} />
+          <Arrow from={[0, 0]} to={v1} color="var(--c-v1)" width={3.5 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={nrm ? add(scale(v1, 0.5), scale(nrm, font)) : lab([0, 0], v1)} />
+          <Arrow
+            from={add(v2Base, offV2)}
+            to={add(v2End, offV2)}
+            color="var(--c-v2)"
+            width={3.5 * k}
+            head={head}
+            label="v₂"
+            fontSize={font}
+            labelShift={shiftV2}
+            labelAt={lab(v1, v)}
+          />
           {/* 再生中は v を明滅させ、① の地面に対する軌跡と同じ向きだと気づかせる（仕様 04 §6） */}
-          <g className={s.status === 'playing' ? 'pulse' : undefined}>
-            <Arrow from={offV} to={add(v, offV)} color="var(--c-v)" width={5 * k} head={head * 1.15} label="v" fontSize={font} labelShift={shiftV} labelAt={lab([0, 0], v)} />
-          </g>
+          {phase.draw > 0 && (
+            <g className={s.status === 'playing' ? 'pulse' : undefined}>
+              <Arrow
+                from={offV}
+                to={add(scale(v, phase.draw), offV)}
+                color="var(--c-v)"
+                width={5 * k}
+                head={head * 1.15}
+                label={done ? 'v' : undefined}
+                fontSize={font}
+                labelShift={shiftV}
+                labelAt={lab([0, 0], v)}
+              />
+            </g>
+          )}
 
           <circle className="origin" cx={0} cy={0} r={px(4)} />
 

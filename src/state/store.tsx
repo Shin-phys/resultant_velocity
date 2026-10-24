@@ -28,6 +28,10 @@ export interface AppState {
   sim: SimState;
   /** 選んだ例の id。速度などを手で変えたら null に戻す */
   presetId: string | null;
+  /** 合成速度 v を出しているか（仕様 06「合成速度 v を出すタイミング」） */
+  vShown: boolean;
+  /** v を出し始めた時刻（アニメーション用）。null ならアニメーションなしで出す */
+  revealAt: number | null;
 }
 
 export const initialState: AppState = {
@@ -47,6 +51,8 @@ export const initialState: AppState = {
   speed: 1,
   sim: initialSim(),
   presetId: 'straight',
+  vShown: false,
+  revealAt: null,
 };
 
 const clampInt = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n) || 0));
@@ -116,8 +122,20 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'loadPreset': {
       const v2 = axisAlign(clampVec(a.v2));
       const { dir, speed } = flowFromVector(v2, s.flowDir);
-      return resetSim({ ...s, v1: clampVec(a.v1), flowDir: dir, flowSpeed: speed, goal: a.goal, presetId: a.id });
+      // 別の例を選んだら、v はまた隠す
+      return resetSim({
+        ...s,
+        v1: clampVec(a.v1),
+        flowDir: dir,
+        flowSpeed: speed,
+        goal: a.goal,
+        presetId: a.id,
+        vShown: false,
+        revealAt: null,
+      });
     }
+    case 'revealV':
+      return s.vShown ? s : { ...s, vShown: true, revealAt: a.at };
   }
 }
 
