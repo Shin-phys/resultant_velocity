@@ -1,0 +1,68 @@
+[
+  {
+    "id": "s3-01",
+    "stage": 3,
+    "type": "T2",
+    "skin": "river",
+    "v1": [
+      2,
+      4
+    ],
+    "v2": [
+      -3,
+      0
+    ],
+    "goal": {
+      "kind": "crossBank",
+      "width": 12
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "v₁ と v₂ の矢印が方眼に与えられている。合成速度を作図し、成分表を埋めよう。",
+    "variants": []
+  },
+  {
+    "id": "s3-02",
+    "stage": 3,
+    "type": "T3",
+    "skin": "river",
+    "v1": [
+      -1,
+      3
+    ],
+    "v2": [
+      4,
+      0
+    ],
+    "goal": {
+      "kind": "crossBank",
+      "width": 12
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "船は上流側に斜めに船首を向け、静水に対して v₁ = (−1, 3) m/s で進む。川は右向きに 4 m/s で流れている。船はどこに着くか。",
+    "variants": []
+  },
+  {
+    "id": "s3-03",
+    "stage": 3,
+    "type": "T1",
+    "skin": "river",
+    "v1": [
+      -2,
+      3
+    ],
+    "v2": [
+      2,
+      0
+    ],
+    "goal": {
+      "kind": "crossBank",
+      "width": 12
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "v₁ と v₂ の成分が表に与えられている。合成速度を作図し、着岸点を予想しよう。",
+    "variants": []
+  }
+]

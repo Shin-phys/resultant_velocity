@@ -1,0 +1,90 @@
+[
+  {
+    "id": "s1-01",
+    "stage": 1,
+    "type": "T3",
+    "skin": "river",
+    "v1": [
+      3,
+      0
+    ],
+    "v2": [
+      2,
+      0
+    ],
+    "goal": {
+      "kind": "time",
+      "t": 5
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "船は静水に対して右向きに 3 m/s で進む。川は右向きに 2 m/s で流れている。5 秒後、船はどこにいるか。",
+    "variants": []
+  },
+  {
+    "id": "s1-02",
+    "stage": 1,
+    "type": "T3",
+    "skin": "river",
+    "v1": [
+      3,
+      0
+    ],
+    "v2": [
+      -2,
+      0
+    ],
+    "goal": {
+      "kind": "time",
+      "t": 5
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "船は静水に対して右向きに 3 m/s で進む。川は左向きに 2 m/s で流れている。5 秒後、船はどこにいるか。",
+    "variants": []
+  },
+  {
+    "id": "s1-03",
+    "stage": 1,
+    "type": "T3",
+    "skin": "river",
+    "v1": [
+      2,
+      0
+    ],
+    "v2": [
+      -3,
+      0
+    ],
+    "goal": {
+      "kind": "time",
+      "t": 5
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "船は静水に対して右向きに 2 m/s で進む。川は左向きに 3 m/s で流れている。5 秒後、船はどこにいるか。",
+    "variants": []
+  },
+  {
+    "id": "s1-04",
+    "stage": 1,
+    "type": "T1",
+    "skin": "river",
+    "v1": [
+      -4,
+      0
+    ],
+    "v2": [
+      1,
+      0
+    ],
+    "goal": {
+      "kind": "time",
+      "t": 5
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "v₁ と v₂ の成分が表に与えられている。合成速度を作図し、5 秒後の位置を予想しよう。",
+    "variants": []
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "s4-01",
+    "stage": 4,
+    "type": "T4",
+    "skin": "river",
+    "v1": [
+      -3,
+      4
+    ],
+    "v2": [
+      3,
+      0
+    ],
+    "goal": {
+      "kind": "point",
+      "target": [
+        0,
+        12
+      ],
+      "width": 12
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "静水に対する速さ 5 m/s の船で、右向きに 3 m/s で流れる川を真向かいに渡りたい。船首をどちらに向けるか。",
+    "variants": [],
+    "v1Speed": 5
+  },
+  {
+    "id": "s4-02",
+    "stage": 4,
+    "type": "T4",
+    "skin": "river",
+    "v1": [
+      6,
+      8
+    ],
+    "v2": [
+      -6,
+      0
+    ],
+    "goal": {
+      "kind": "point",
+      "target": [
+        0,
+        16
+      ],
+      "width": 16
+    },
+    "askResultantRow": true,
+    "gridRange": 10,
+    "text": "静水に対する速さ 10 m/s の船で、左向きに 6 m/s で流れる川を真向かいに渡りたい。船首をどちらに向けるか。",
+    "variants": [],
+    "v1Speed": 10
+  },
+  {
+    "id": "s4-03",
+    "stage": 4,
+    "type": "T4",
+    "skin": "river",
+    "v1": [
+      -5,
+      12
+    ],
+    "v2": [
+      5,
+      0
+    ],
+    "goal": {
+      "kind": "point",
+      "target": [
+        0,
+        24
+      ],
+      "width": 24
+    },
+    "askResultantRow": true,
+    "gridRange": 13,
+    "text": "静水に対する速さ 13 m/s の船で、右向きに 5 m/s で流れる川を真向かいに渡りたい。船首をどちらに向けるか。",
+    "variants": [],
+    "v1Speed": 13
+  },
+  {
+    "id": "s4-04",
+    "stage": 4,
+    "type": "T4",
+    "skin": "river",
+    "v1": [
+      3,
+      4
+    ],
+    "v2": [
+      2,
+      0
+    ],
+    "goal": {
+      "kind": "point",
+      "target": [
+        15,
+        12
+      ],
+      "width": 12
+    },
+    "askResultantRow": true,
+    "gridRange": 8,
+    "text": "静水に対する速さ 5 m/s の船で、右向きに 2 m/s で流れる川を渡り、対岸の地点 (15, 12) に着きたい。船首をどちらに向けるか。",
+    "variants": [],
+    "v1Speed": 5
+  }
+]
