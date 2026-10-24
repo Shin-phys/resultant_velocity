@@ -1,13 +1,16 @@
 import { useMemo, useRef, useState } from 'react';
 import { axisAlign, FLOW_UNIT } from '../../model/kinematics';
-import { add, clampBox, collinearNormal, formatLength, isZero, scale, snap, sub, type Vec } from '../../model/vector';
+import { add, clampBox, formatLength, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
-import { Arrow, fy, useElementSize } from '../common/svg';
-import { useDrag } from '../common/useDrag';
+import { Handle } from '../common/Handle';
+import { Arrow, outsideMidpoint, useElementSize } from '../common/svg';
+import { useTipDrag } from '../common/useDrag';
 
 /** 方眼の最小の範囲 [m/s]（仕様 04 §1） */
 const GRID_MIN = 8;
 const PAD = 1.2;
+/** 矢印が重なるときにずらす量 [マス] */
+const OFFSET = 0.35;
 
 /** ② ベクトル図ビュー（仕様 04）。探究モードでは「つなぐ方式」で固定表示する。 */
 export function VectorView() {
@@ -27,8 +30,9 @@ export function VectorView() {
   const R = frozenR ?? needed;
   const span = 2 * (R + PAD);
   const U = size.w > 0 && size.h > 0 ? span / Math.min(size.w, size.h) : span / 360;
-  const head = 12 * k * U;
-  const font = 14 * k * U;
+  const px = (n: number) => n * k * U;
+  const head = px(12);
+  const font = px(14);
 
   const grid = useMemo(() => {
     const ls: { x1: number; y1: number; x2: number; y2: number; cls: string }[] = [];
@@ -42,27 +46,35 @@ export function VectorView() {
   const ticks: number[] = [];
   for (let n = -Math.floor(R / 5) * 5; n <= R; n += 5) if (n !== 0) ticks.push(n);
 
+  // 矢印が重なる配置（同一直線上、または v₂ = 0）のときは、v₂ と v を両側へずらす
+  const nrm = overlapNormal(v1, v2);
+  const offV2: Vec = nrm ? scale(nrm, OFFSET) : [0, 0];
+  const offV: Vec = nrm ? scale(nrm, -OFFSET) : [0, 0];
+  const shiftV1: Vec | undefined = nrm ? [0, 0] : undefined;
+  const shiftV2: Vec | undefined = nrm ? scale(nrm, font * 1.3) : undefined;
+  const shiftV: Vec | undefined = nrm ? scale(nrm, -font * 1.3) : undefined;
+  // 三角形になるときは、各辺の中点の外側にラベルを置く（先端どうしが重なってもラベルは重ならない）
+  const centroid: Vec = [(v1[0] + v[0]) / 3, (v1[1] + v[1]) / 3];
+  const lab = (from: Vec, to: Vec): Vec | undefined => (nrm ? undefined : outsideMidpoint(from, to, centroid, font * 0.9));
+
+  // v₂ = 0 のときのつまみ：v₁ の先から流れの向き（v₁ と平行ならその横）に少し離して置く
+  const flowU = FLOW_UNIT[s.flowDir];
+  const zeroDir: Vec = isParallel(flowU, v1) && nrm ? nrm : flowU;
+  const v2Handle: Vec = isZero(v2) ? add(v1, scale(zeroDir, 0.9)) : add(v, offV2);
+
   const freeze = { onStart: () => setFrozenR(needed), onEnd: () => setFrozenR(null) };
-  const dragV1 = useDrag(svgRef, {
-    ...freeze,
-    onMove: (p) => dispatch({ type: 'setV1', v: clampBox(snap(p), R) }),
-  });
-  const dragV2 = useDrag(svgRef, {
-    ...freeze,
-    onMove: (p) => {
+  const dragV1 = useTipDrag(svgRef, () => v1, (p) => dispatch({ type: 'setV1', v: clampBox(snap(p), R) }), freeze);
+  const dragV2 = useTipDrag(
+    svgRef,
+    () => v,
+    (p) => {
       const d = axisAlign(snap(sub(p, v1)));
       // 先端（v₁ + v₂）が方眼からはみ出さないようにする
       const tip = clampBox(add(v1, d), R);
       dispatch({ type: 'setV2', v: axisAlign(sub(tip, v1)) });
     },
-  });
-
-  // v₂ が 0 のとき、ハンドルが v₁ の先端と重ならないよう流れの向きに少しずらして置く
-  // 同一直線上（段階1）のときは v₂ と v を直線の両側へ少しずらして、重ならないようにする
-  const nrm = collinearNormal(v1, v2);
-  const offV2: Vec = nrm ? scale(nrm, 0.35) : [0, 0];
-  const offV: Vec = nrm ? scale(nrm, -0.35) : [0, 0];
-  const v2Handle: Vec = isZero(v2) ? add(v1, scale(FLOW_UNIT[s.flowDir], 0.8)) : add(v, offV2);
+    freeze,
+  );
 
   const { magnitudes, components, parallelogram } = s.display;
 
@@ -71,6 +83,13 @@ export function VectorView() {
       <header className="pane-head">
         <h2>② ベクトル図</h2>
         <span className="hint">1マス＝1 m/s</span>
+        {magnitudes && (
+          <span className="mags" aria-label="大きさ">
+            <span className="c-v1">|v₁| = {formatLength(v1)}</span>
+            <span className="c-v2">|v₂| = {formatLength(v2)}</span>
+            <span className="c-v">|v| = {formatLength(v)}</span>
+          </span>
+        )}
       </header>
       <div className="vector-box" ref={boxRef}>
         <svg
@@ -85,15 +104,15 @@ export function VectorView() {
             <line key={i} {...l} className={`grid-${l.cls}`} vectorEffect="non-scaling-stroke" />
           ))}
           {ticks.map((n) => (
-              <g key={n} className="tick">
-                <text x={n} y={font * 1.1} fontSize={font * 0.8} textAnchor="middle">
-                  {n}
-                </text>
-                <text x={-font * 0.6} y={-n} fontSize={font * 0.8} textAnchor="end" dominantBaseline="middle">
-                  {n}
-                </text>
-              </g>
-            ))}
+            <g key={n} className="tick">
+              <text x={n} y={font * 1.1} fontSize={font * 0.8} textAnchor="middle">
+                {n}
+              </text>
+              <text x={-font * 0.6} y={-n} fontSize={font * 0.8} textAnchor="end" dominantBaseline="middle">
+                {n}
+              </text>
+            </g>
+          ))}
           <text x={R + PAD * 0.4} y={-font * 0.6} fontSize={font * 0.8} textAnchor="end" className="tick">
             vx
           </text>
@@ -101,7 +120,7 @@ export function VectorView() {
             vy
           </text>
 
-          {/* 成分の破線 */}
+          {/* 成分の点線 */}
           {components && (
             <g>
               <ComponentLines vec={v1} color="var(--c-v1)" />
@@ -110,77 +129,24 @@ export function VectorView() {
           )}
 
           {/* 平行四辺形の並べ方（v₂ を原点から、v₁ を v₂ の先から） */}
-          {parallelogram && !isZero(v2) && (
+          {parallelogram && !isZero(v2) && !nrm && (
             <g>
               <Arrow from={[0, 0]} to={v2} color="var(--c-v2)" width={2 * k} head={head} dashed opacity={0.6} />
               <Arrow from={v2} to={v} color="var(--c-v1)" width={2 * k} head={head} dashed opacity={0.6} />
             </g>
           )}
 
-          <Arrow from={[0, 0]} to={v1} color="var(--c-v1)" width={3.5 * k} head={head} label="v₁" fontSize={font} />
-          <Arrow from={add(v1, offV2)} to={add(v, offV2)} color="var(--c-v2)" width={3.5 * k} head={head} label="v₂" fontSize={font} />
+          <Arrow from={[0, 0]} to={v1} color="var(--c-v1)" width={3.5 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={lab([0, 0], v1)} />
+          <Arrow from={add(v1, offV2)} to={add(v, offV2)} color="var(--c-v2)" width={3.5 * k} head={head} label="v₂" fontSize={font} labelShift={shiftV2} labelAt={lab(v1, v)} />
           {/* 再生中は v を明滅させ、① の地面に対する軌跡と同じ向きだと気づかせる（仕様 04 §6） */}
           <g className={s.status === 'playing' ? 'pulse' : undefined}>
-            <Arrow from={offV} to={add(v, offV)} color="var(--c-v)" width={5 * k} head={head * 1.15} label="v" fontSize={font} />
+            <Arrow from={offV} to={add(v, offV)} color="var(--c-v)" width={5 * k} head={head * 1.15} label="v" fontSize={font} labelShift={shiftV} labelAt={lab([0, 0], v)} />
           </g>
 
-          {magnitudes && (
-            <g>
-              <MagLabel from={[0, 0]} to={v1} text={`|v₁| = ${formatLength(v1)}`} color="var(--c-v1)" font={font} side={1} />
-              <MagLabel from={add(v1, offV2)} to={add(v, offV2)} text={`|v₂| = ${formatLength(v2)}`} color="var(--c-v2)" font={font} side={1} />
-              <MagLabel from={offV} to={add(v, offV)} text={`|v| = ${formatLength(v)}`} color="var(--c-v)" font={font} side={-1} />
-            </g>
-          )}
+          <circle className="origin" cx={0} cy={0} r={px(4)} />
 
-          <circle className="origin" cx={0} cy={0} r={4 * k * U} />
-
-          <circle
-            className="handle"
-            cx={fy(v1)[0]}
-            cy={fy(v1)[1]}
-            r={12 * k * U}
-            fill="var(--c-v1)"
-            fillOpacity={0.18}
-            stroke="var(--c-v1)"
-            strokeWidth={2}
-            vectorEffect="non-scaling-stroke"
-            {...dragV1}
-          >
-            <title>ドラッグで v₁ を変える</title>
-          </circle>
-          {isZero(v2) ? (
-            <rect
-              className="handle"
-              x={fy(v2Handle)[0] - 8 * k * U}
-              y={fy(v2Handle)[1] - 8 * k * U}
-              width={16 * k * U}
-              height={16 * k * U}
-              transform={`rotate(45 ${fy(v2Handle)[0]} ${fy(v2Handle)[1]})`}
-              fill="var(--c-v2)"
-              fillOpacity={0.3}
-              stroke="var(--c-v2)"
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-              {...dragV2}
-            >
-              <title>ドラッグで v₂（流れ）を伸ばす</title>
-            </rect>
-          ) : (
-            <circle
-              className="handle"
-              cx={fy(v2Handle)[0]}
-              cy={fy(v2Handle)[1]}
-              r={12 * k * U}
-              fill="var(--c-v2)"
-              fillOpacity={0.18}
-              stroke="var(--c-v2)"
-              strokeWidth={2}
-              vectorEffect="non-scaling-stroke"
-              {...dragV2}
-            >
-              <title>ドラッグで v₂（流れ）を変える。上下左右にだけ動く</title>
-            </circle>
-          )}
+          <Handle at={v2Handle} r={px(12)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れ）を変える。上下左右にだけ動く" />
+          <Handle at={v1} r={px(12)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁ を変える" />
         </svg>
       </div>
     </section>
@@ -200,20 +166,5 @@ function ComponentLines({ vec, color }: { vec: Vec; color: string }) {
       vectorEffect="non-scaling-stroke"
       opacity={0.8}
     />
-  );
-}
-
-function MagLabel(props: { from: Vec; to: Vec; text: string; color: string; font: number; side: 1 | -1 }) {
-  const { from, to, text, color, font, side } = props;
-  const d = sub(to, from);
-  const len = Math.hypot(d[0], d[1]);
-  if (len < 1e-9) return null;
-  const n: Vec = [(-d[1] / len) * side, (d[0] / len) * side];
-  const mid: Vec = [(from[0] + to[0]) / 2 + n[0] * font * 1.1, (from[1] + to[1]) / 2 + n[1] * font * 1.1];
-  const [x, y] = fy(mid);
-  return (
-    <text x={x} y={y} fill={color} fontSize={font * 0.85} textAnchor="middle" dominantBaseline="middle" className="svg-label">
-      {text}
-    </text>
   );
 }

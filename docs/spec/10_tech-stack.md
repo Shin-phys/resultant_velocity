@@ -22,7 +22,7 @@ src/
     store.ts             # アプリ状態（モード、v₁, v₂, 再生状態、練習中の入力）
     actions.ts
   views/
-    scene/               # ① 場面ビュー（媒質シート、物体、軌跡、予想）
+    scene/               # ① イメージ図（媒質シート、物体、軌跡、予想）
     vector/              # ② ベクトル図ビュー（方眼、矢印、ハンドル）
     table/               # ③ 成分表ビュー
   playback/
@@ -30,7 +30,8 @@ src/
     stepper.ts           # コマ送り（(a)→(b)→(c)）
   ui/                    # ヘッダー、操作バー、フィードバック欄、記録画面
   skins/                 # 川と船、風と飛行機、動く歩道と人
-  data/problems/         # stage1.json 〜 stage4.json
+  data/problems/         # stage1.json 〜 stage4.json（練習モードの問題）
+  data/presets.ts        # 探究モードの「例」
   styles/                # 色トークン（v₁=青, v₂=緑, v=赤）、ダークモード
 tests/                   # model/ の単体テスト（Vitest）
 docs/spec/               # この仕様書

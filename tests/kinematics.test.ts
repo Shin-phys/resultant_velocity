@@ -39,8 +39,22 @@ describe('終了条件（解析解）', () => {
   it('向こう岸に向かわないときは出発しない', () => {
     expect(computeEnd([3, -1], C12, 'right').reason).toBe('noCross');
   });
-  it('横断成分が 0 なら打ち切り', () => {
-    expect(computeEnd([3, 0], C12, 'right').reason).toBe('limit');
+  it('流れと平行に進むと、流れに沿う範囲の端で止まる', () => {
+    const e = computeEnd([0, 6], C12, 'down');
+    expect(e.reason).toBe('edge');
+    expect(e.t).toBeCloseTo(5, 9);
+    expect(e.pos).toEqual([0, 30]);
+  });
+  it('止まったままなら打ち切り', () => {
+    expect(computeEnd([0, 0], C12, 'right').reason).toBe('limit');
+  });
+  it('逐次計算でも端で止まり、表示範囲は広がりすぎない', () => {
+    const s = run([0, 6], [0, 0], C12, 'down');
+    expect(s.finished?.reason).toBe('edge');
+    expect(s.pos[1]).toBe(30);
+    const b = viewportFor(C12, 'down', [0, 6], [0, 0], s.groundTrail);
+    // 端（30 m）＋終了時の矢印（6 m）＋余白 → 40 m で頭打ち
+    expect(b.yMax).toBe(40);
   });
   it('時間指定でも先に岸に着けば止まる', () => {
     const e = computeEnd([0, 3], { kind: 'time', t: 5, width: 12 }, 'right');
@@ -91,13 +105,14 @@ describe('表示範囲', () => {
     expect(b.xMin).toBe(-b.xMax);
     expect(b.xMin).toBeLessThanOrEqual(-16);
     expect(b.yMin).toBe(-3);
-    expect(b.yMax).toBe(15);
+    // 向こう岸（12 m）で終わったときの v₁ の矢印の先（15 m）＋余白
+    expect(b.yMax).toBe(18);
   });
   it('流れが上下なら川は縦向き', () => {
     const b = viewportFor({ kind: 'crossBank', width: 12 }, 'down', [4, 0], [0, -2]);
     expect(b.yMin).toBe(-b.yMax);
     expect(b.xMin).toBe(-3);
-    expect(b.xMax).toBe(15);
+    expect(b.xMax).toBe(19);
   });
   it('縦横比に合わせても中心は動かない', () => {
     const b = fitAspect({ xMin: -10, xMax: 10, yMin: -3, yMax: 15 }, 2);

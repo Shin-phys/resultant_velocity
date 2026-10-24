@@ -8,15 +8,20 @@ const DIRS: { dir: FlowDir; label: string; name: string }[] = [
   { dir: 'right', label: '→', name: '右向き' },
 ];
 
-const WIDTHS = [8, 12, 16, 20, 24];
+/** 川幅 [m]。選択肢を減らすため固定にする */
+const WIDTH = 12;
+/** 時間で止めるときの時刻 [s] */
+const STOP_T = 5;
 
-/** ① の上部：流れ（v₂）と終了条件の操作（仕様 06 §1）。 */
+const STOPS: { key: Goal['kind']; label: string; goal: Goal }[] = [
+  { key: 'crossBank', label: '向こう岸で', goal: { kind: 'crossBank', width: WIDTH } },
+  { key: 'time', label: `${STOP_T}秒で`, goal: { kind: 'time', t: STOP_T, width: WIDTH } },
+];
+
+/** ① の上部：流れ（v₂）と止めるタイミングの操作（仕様 06 §1）。 */
 export function FlowControls() {
   const s = useAppState();
   const dispatch = useDispatch();
-  const g = s.goal;
-
-  const setGoal = (goal: Goal) => dispatch({ type: 'setGoal', goal });
 
   return (
     <div className="controls">
@@ -43,37 +48,20 @@ export function FlowControls() {
         />
       </div>
 
-      <div className="ctl-group" role="group" aria-label="終了条件">
-        <span className="ctl-label">終了</span>
-        <select
-          value={g.kind === 'time' ? 'time' : 'crossBank'}
-          aria-label="終了条件"
-          onChange={(e) =>
-            setGoal(
-              e.target.value === 'time'
-                ? { kind: 'time', t: 5, width: g.width }
-                : { kind: 'crossBank', width: g.width },
-            )
-          }
-        >
-          <option value="crossBank">向こう岸に着くまで</option>
-          <option value="time">時間で止める</option>
-        </select>
-        {g.kind === 'time' && (
-          <Stepper value={g.t} unit="s" min={1} max={20} label="止める時刻" onChange={(t) => setGoal({ ...g, t })} />
-        )}
-        <span className="ctl-label">川幅</span>
-        <select
-          value={g.width}
-          aria-label="川幅"
-          onChange={(e) => setGoal({ ...g, width: Number(e.target.value) } as Goal)}
-        >
-          {WIDTHS.map((w) => (
-            <option key={w} value={w}>
-              {w} m
-            </option>
+      <div className="ctl-group" role="group" aria-label="止めるタイミング">
+        <span className="ctl-label">止める</span>
+        <div className="seg">
+          {STOPS.map((st) => (
+            <button
+              key={st.key}
+              className="seg-btn"
+              aria-pressed={s.goal.kind === st.key || (st.key === 'crossBank' && s.goal.kind === 'point')}
+              onClick={() => dispatch({ type: 'setGoal', goal: st.goal })}
+            >
+              {st.label}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
     </div>
   );

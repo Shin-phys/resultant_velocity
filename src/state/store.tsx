@@ -10,7 +10,7 @@ import {
   type Goal,
   type SimState,
 } from '../model/kinematics';
-import { add, snap, type Vec } from '../model/vector';
+import { add, equals, snap, type Vec } from '../model/vector';
 import type { Action, DisplayOptions, PlayStatus } from './actions';
 
 /** 成分の上限 [m/s]（仕様 05 §2） */
@@ -26,6 +26,8 @@ export interface AppState {
   status: PlayStatus;
   speed: 1 | 2;
   sim: SimState;
+  /** 選んだ例の id。速度などを手で変えたら null に戻す */
+  presetId: string | null;
 }
 
 export const initialState: AppState = {
@@ -35,9 +37,7 @@ export const initialState: AppState = {
   goal: { kind: 'crossBank', width: 12 },
   display: {
     sceneArrows: true,
-    mediumTrail: true,
-    groundTrail: true,
-    strobes: true,
+    trails: true,
     magnitudes: true,
     components: false,
     parallelogram: false,
@@ -46,6 +46,7 @@ export const initialState: AppState = {
   status: 'idle',
   speed: 1,
   sim: initialSim(),
+  presetId: 'straight',
 };
 
 const clampInt = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n) || 0));
@@ -67,24 +68,33 @@ function afterVelocityChange(s: AppState): AppState {
 
 const resetSim = (s: AppState): AppState => ({ ...s, status: 'idle', sim: initialSim() });
 
+/** 流れを変える。川の向き（横・縦）が変わるときは最初からやり直す。 */
+function changeFlow(s: AppState, dir: FlowDir, speed: number): AppState {
+  if (dir === s.flowDir && speed === s.flowSpeed) return s;
+  const next = { ...s, flowDir: dir, flowSpeed: speed, presetId: null };
+  return acrossAxis(dir) !== acrossAxis(s.flowDir) ? resetSim(next) : afterVelocityChange(next);
+}
+
 export function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
-    case 'setV1':
-      return afterVelocityChange({ ...s, v1: clampVec(a.v) });
+    case 'setV1': {
+      const v1 = clampVec(a.v);
+      // ドラッグ中は同じ値が何度も届くので、変わらないときは何もしない
+      if (equals(v1, s.v1)) return s;
+      return afterVelocityChange({ ...s, v1, presetId: null });
+    }
     case 'setV2': {
       const v = axisAlign(clampVec(a.v));
       const { dir, speed } = flowFromVector(v, s.flowDir);
-      const next = { ...s, flowDir: dir, flowSpeed: speed };
-      return acrossAxis(dir) !== acrossAxis(s.flowDir) ? resetSim(next) : afterVelocityChange(next);
+      return changeFlow(s, dir, speed);
     }
-    case 'setFlowDir': {
-      const next = { ...s, flowDir: a.dir };
-      return acrossAxis(a.dir) !== acrossAxis(s.flowDir) ? resetSim(next) : afterVelocityChange(next);
-    }
+    case 'setFlowDir':
+      return changeFlow(s, a.dir, s.flowSpeed);
     case 'setFlowSpeed':
-      return afterVelocityChange({ ...s, flowSpeed: clampInt(a.speed, 0, V_MAX) });
+      return changeFlow(s, s.flowDir, clampInt(a.speed, 0, V_MAX));
     case 'setGoal':
-      return resetSim({ ...s, goal: a.goal });
+      if (a.goal.kind === s.goal.kind && a.goal.width === s.goal.width) return s;
+      return resetSim({ ...s, goal: a.goal, presetId: null });
     case 'toggleDisplay':
       return { ...s, display: { ...s.display, [a.key]: !s.display[a.key] } };
     case 'setPresentation':
@@ -106,7 +116,7 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'loadPreset': {
       const v2 = axisAlign(clampVec(a.v2));
       const { dir, speed } = flowFromVector(v2, s.flowDir);
-      return resetSim({ ...s, v1: clampVec(a.v1), flowDir: dir, flowSpeed: speed, goal: a.goal });
+      return resetSim({ ...s, v1: clampVec(a.v1), flowDir: dir, flowSpeed: speed, goal: a.goal, presetId: a.id });
     }
   }
 }

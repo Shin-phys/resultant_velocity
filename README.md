@@ -4,7 +4,7 @@
 
 3つの窓で同じ運動を表す。
 
-- ① **場面**：流れる媒質（川など）と物体の運動。媒質に対する軌跡と地面に対する軌跡を並べて描く
+- ① **イメージ図**：流れる媒質（川など）と物体の運動。媒質に対する軌跡と地面に対する軌跡を並べて描く
 - ② **ベクトル図**：方眼上で v₁・v₂・v を作図する
 - ③ **成分表**：vx, vy の数値で成分ごとの和を確かめる
 
@@ -31,7 +31,7 @@ main に push すると GitHub Actions がテストとビルドを行い、GitHu
 | [00_overview.md](docs/spec/00_overview.md) | 目的・対象・原案からの変更点 |
 | [01_learning-design.md](docs/spec/01_learning-design.md) | 用語と記号、想定するつまずき、学習サイクル、段階、授業例 |
 | [02_screen-layout.md](docs/spec/02_screen-layout.md) | 画面構成、画面サイズごとの配置、色の約束 |
-| [03_scene-view.md](docs/spec/03_scene-view.md) | ① 場面ビュー |
+| [03_scene-view.md](docs/spec/03_scene-view.md) | ① イメージ図 |
 | [04_vector-view.md](docs/spec/04_vector-view.md) | ② ベクトル図ビュー |
 | [05_table-view.md](docs/spec/05_table-view.md) | ③ 成分表ビュー |
 | [06_modes-and-sync.md](docs/spec/06_modes-and-sync.md) | 探究モード・練習モードと同期 |

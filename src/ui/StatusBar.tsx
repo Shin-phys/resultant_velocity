@@ -8,9 +8,9 @@ export function StatusBar() {
   let msg: string;
 
   if (s.status === 'idle') {
-    msg = 'v₁（物体の速度）と v₂（流れの速度）は、①②③のどこからでも変えられます。▶ で再生。';
+    msg = '矢印の先の丸をドラッグするか、③に数を入れると、v₁（物体の速度）と v₂（流れの速度）が変わります。▶ で再生。';
   } else if (s.status === 'playing') {
-    msg = '再生中… 青い点線は水に対する軌跡、赤い線は地面に対する軌跡です。';
+    msg = '再生中… 青い点線は水に対して通った跡、赤い線は地面に対して通った跡です。';
   } else if (s.status === 'paused') {
     msg = '一時停止中。このまま速度を変えて再生すると、そこから新しい速度で進みます。';
   } else if (f) {
@@ -22,11 +22,17 @@ export function StatusBar() {
       case 'time':
         msg = `${s.goal.kind === 'time' ? s.goal.t : f.t.toFixed(1)} 秒後の位置は ${formatVec(f.pos)} m です。`;
         break;
+      case 'edge':
+        msg =
+          s.goal.kind === 'time'
+            ? `${s.goal.t}秒たつ前に画面の端まで来たので止めました（${at}）。`
+            : `向こう岸に着く前に画面の端まで来たので止めました（${at}）。`;
+        break;
       case 'noCross':
         msg = '合成速度 v に向こう岸へ向かう成分がないため、出発できません。v₁ の向きを変えてみよう。';
         break;
       case 'limit':
-        msg = `向こう岸へ向かう成分が 0 なので、${f.t.toFixed(0)} 秒で打ち切りました（${at}）。`;
+        msg = `合成速度 v が 0 なので、地面に対しては動きません（${f.t.toFixed(0)} 秒で打ち切り）。`;
         break;
     }
   } else {

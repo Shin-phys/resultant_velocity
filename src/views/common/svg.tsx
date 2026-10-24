@@ -46,10 +46,17 @@ interface ArrowProps {
   label?: string;
   /** ラベルの文字の大きさ（世界座標の単位） */
   fontSize?: number;
+  /**
+   * ラベルを横へずらす量（世界座標）。省略時は矢印の左側へ少しずらす。
+   * 矢印が重なる配置のとき、ラベルどうしが重ならないように呼び出し側で指定する。
+   */
+  labelShift?: Vec;
+  /** ラベルの位置（世界座標）を直接決める。指定すると labelShift より優先する */
+  labelAt?: Vec;
 }
 
 /** 矢印。矢じりは世界座標で描き、線の太さは画面上の px で一定にする。 */
-export function Arrow({ from, to, color, width, head, dashed, opacity = 1, label, fontSize = 1 }: ArrowProps) {
+export function Arrow({ from, to, color, width, head, dashed, opacity = 1, label, fontSize = 1, labelShift, labelAt }: ArrowProps) {
   const dx = to[0] - from[0];
   const dy = to[1] - from[1];
   const len = Math.hypot(dx, dy);
@@ -66,7 +73,8 @@ export function Arrow({ from, to, color, width, head, dashed, opacity = 1, label
   const pts = [to, left, right].map((p) => fy(p).join(',')).join(' ');
   // ラベルは先端の少し先、左側にずらして置く
   // （先端にはドラッグ用のハンドルが重なることがあるので、それより外に出す）
-  const lp: Vec = [to[0] + ux * fontSize * 1.5 - uy * fontSize * 0.4, to[1] + uy * fontSize * 1.5 + ux * fontSize * 0.4];
+  const shift: Vec = labelShift ?? [-uy * fontSize * 0.4, ux * fontSize * 0.4];
+  const lp: Vec = labelAt ?? [to[0] + ux * fontSize * 1.4 + shift[0], to[1] + uy * fontSize * 1.4 + shift[1]];
   const [lx, ly] = fy(lp);
   return (
     <g opacity={opacity}>
@@ -98,4 +106,18 @@ export function Arrow({ from, to, color, width, head, dashed, opacity = 1, label
       )}
     </g>
   );
+}
+
+/**
+ * 三角形の辺 from→to のラベル位置：辺の中点から、三角形の外側へ dist だけ離した点。
+ * center は三角形の重心。
+ */
+export function outsideMidpoint(from: Vec, to: Vec, center: Vec, dist: number): Vec {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const n: Vec = [-dy / len, dx / len];
+  const m: Vec = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+  const side = (m[0] - center[0]) * n[0] + (m[1] - center[1]) * n[1] >= 0 ? 1 : -1;
+  return [m[0] + n[0] * side * dist, m[1] + n[1] * side * dist];
 }

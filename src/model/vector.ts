@@ -32,11 +32,18 @@ export const formatComponent = (n: number): string => {
 export const formatVec = (a: Vec): string => `(${formatComponent(a[0])}, ${formatComponent(a[1])})`;
 
 /**
- * v₁ と v₂ が同一直線上（どちらも 0 でない）なら、その直線に垂直な単位ベクトルを返す。
- * 同一直線上の矢印は重なって見えなくなるので、描画時にこの向きへ少しずらす。
+ * 矢印が重なる配置かどうかを調べ、重なるならずらす向き（単位ベクトル）を返す。
+ * v₁ と v₂ が同一直線上のとき（どちらかが 0 のときも含む）は、v が v₁ や v₂ と重なって見えなくなる。
+ * ずらす向きは、0 でない方（v₁ を優先）に垂直な向き。両方 0 なら null。
  */
-export function collinearNormal(a: Vec, b: Vec): Vec | null {
-  if (isZero(a) || isZero(b) || a[0] * b[1] - a[1] * b[0] !== 0) return null;
-  const L = length(b);
-  return [-b[1] / L, b[0] / L];
+export function overlapNormal(v1: Vec, v2: Vec): Vec | null {
+  if (v1[0] * v2[1] - v1[1] * v2[0] !== 0) return null;
+  const base = !isZero(v1) ? v1 : !isZero(v2) ? v2 : null;
+  if (!base) return null;
+  const L = length(base);
+  return [-base[1] / L, base[0] / L];
 }
+
+/** 2つのベクトルが平行（同じ向き・逆向きを含む）か。0 ベクトルは平行とみなさない。 */
+export const isParallel = (a: Vec, b: Vec): boolean =>
+  !isZero(a) && !isZero(b) && a[0] * b[1] - a[1] * b[0] === 0;

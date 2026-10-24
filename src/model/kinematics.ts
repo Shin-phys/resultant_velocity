@@ -52,7 +52,13 @@ export function banks(goal: Goal): [number, number] {
 /** 向こう岸に向かう成分がないときなどの打ち切り時間 [s]。 */
 export const T_LIMIT = 20;
 
-export type EndReason = 'bank' | 'time' | 'limit' | 'noCross';
+/**
+ * 流れに沿う方向に進める範囲（出発点から ±ALONG_LIMIT [m]）。
+ * 流れと平行に進むと岸に着かないので、ここで止めて画面が際限なく広がらないようにする。
+ */
+export const ALONG_LIMIT = 30;
+
+export type EndReason = 'bank' | 'time' | 'edge' | 'limit' | 'noCross';
 
 export interface EndInfo {
   reason: EndReason;
@@ -63,37 +69,34 @@ export interface EndInfo {
 /** 一定の合成速度 v で原点から出発したときの終了時刻と位置（解析解）。 */
 export function computeEnd(v: Vec, goal: Goal, dir: FlowDir): EndInfo {
   const a = acrossAxis(dir);
+  const b = (1 - a) as 0 | 1;
   const va = v[a];
+  const vb = v[b];
   const [lo, hi] = banks(goal);
-  let t: number;
-  let reason: EndReason;
-  if (goal.kind === 'time') {
-    const tBank = va > 0 ? hi / va : va < 0 ? lo / va : Infinity;
-    if (tBank < goal.t) {
-      t = tBank;
-      reason = 'bank';
-    } else {
-      t = goal.t;
-      reason = 'time';
-    }
-  } else if (va > 0) {
-    t = hi / va;
-    reason = 'bank';
-  } else if (va < 0) {
-    t = 0;
-    reason = 'noCross';
-  } else {
-    t = T_LIMIT;
-    reason = 'limit';
-  }
-  return { reason, t, pos: endPos(v, t, a, reason, goal) };
+  if (goal.kind !== 'time' && va < 0) return { reason: 'noCross', t: 0, pos: [0, 0] };
+
+  // 早く来た終了条件で止まる（同時なら先に書いたものを優先）
+  const cands: { t: number; reason: EndReason }[] = [];
+  if (va > 0) cands.push({ t: hi / va, reason: 'bank' });
+  if (va < 0) cands.push({ t: lo / va, reason: 'bank' });
+  if (goal.kind === 'time') cands.push({ t: goal.t, reason: 'time' });
+  if (vb !== 0) cands.push({ t: ALONG_LIMIT / Math.abs(vb), reason: 'edge' });
+  cands.push({ t: T_LIMIT, reason: 'limit' });
+  let best = cands[0];
+  for (const c of cands) if (c.t < best.t - 1e-12) best = c;
+  return { reason: best.reason, t: best.t, pos: endPos(v, best.t, a, best.reason, goal) };
 }
 
 function endPos(v: Vec, t: number, a: 0 | 1, reason: EndReason, goal: Goal): Vec {
   const p: [number, number] = [v[0] * t, v[1] * t];
+  // 浮動小数の誤差を消して、岸や端の上にそろえる
   if (reason === 'bank') {
     const [lo, hi] = banks(goal);
-    p[a] = v[a] > 0 ? hi : lo; // 浮動小数の誤差を消して岸の上にそろえる
+    p[a] = v[a] > 0 ? hi : lo;
+  }
+  if (reason === 'edge') {
+    const b = 1 - a;
+    p[b] = Math.sign(v[b]) * ALONG_LIMIT;
   }
   return p;
 }
@@ -141,9 +144,11 @@ export function stepSim(s: SimState, v1: Vec, v2: Vec, dt: number, goal: Goal, d
   if (s.finished) return s;
   const v = add(v1, v2);
   const a = acrossAxis(dir);
+  const b = (1 - a) as 0 | 1;
   const [lo, hi] = banks(goal);
   const p = s.pos[a];
   const va = v[a];
+  const vb = v[b];
 
   if (goal.kind !== 'time' && s.t === 0 && va < 0 && p <= lo + EPS) {
     return { ...s, finished: { reason: 'noCross', t: 0, pos: s.pos } };
@@ -154,6 +159,8 @@ export function stepSim(s: SimState, v1: Vec, v2: Vec, dt: number, goal: Goal, d
   if (goal.kind === 'time') candidates.push({ h: goal.t - s.t, reason: 'time' });
   if (va > 0) candidates.push({ h: (hi - p) / va, reason: 'bank' });
   if (va < 0) candidates.push({ h: (p - lo) / -va, reason: 'bank' });
+  if (vb > 0) candidates.push({ h: (ALONG_LIMIT - s.pos[b]) / vb, reason: 'edge' });
+  if (vb < 0) candidates.push({ h: (s.pos[b] + ALONG_LIMIT) / -vb, reason: 'edge' });
 
   let h = dt;
   let reason: EndReason | null = null;
@@ -170,6 +177,7 @@ export function stepSim(s: SimState, v1: Vec, v2: Vec, dt: number, goal: Goal, d
   const t = s.t + h;
   const pos: [number, number] = [s.pos[0] + v[0] * h, s.pos[1] + v[1] * h];
   if (reason === 'bank') pos[a] = va > 0 ? hi : lo; // 浮動小数の誤差を消して岸の上にそろえる
+  if (reason === 'edge') pos[b] = vb > 0 ? ALONG_LIMIT : -ALONG_LIMIT;
   const r1 = add(s.r1, scale(v1, h));
   const sheet = add(s.sheet, scale(v2, h));
 

@@ -16,7 +16,7 @@ export const MARGIN = 3;
 const roundUp5 = (x: number) => Math.ceil(x / 5) * 5;
 
 /**
- * ① 場面の表示範囲（仕様 03 §2）。
+ * ① イメージ図の表示範囲（仕様 03 §2）。
  * - 流れに沿う方向は出発点を中心に対称に広げ、範囲から到達点が推測できないようにする。
  * - 横断方向は岸の間＋余白。
  * extra には軌跡の端点など、必ず画面に入れたい点を渡す。
@@ -24,8 +24,11 @@ const roundUp5 = (x: number) => Math.ceil(x / 5) * 5;
 export function viewportFor(goal: Goal, dir: FlowDir, v1: Vec, v2: Vec, extra: readonly Vec[] = []): Box {
   const a = acrossAxis(dir);
   const b = (1 - a) as 0 | 1;
-  const end = computeEnd(add(v1, v2), goal, dir);
-  const pts: Vec[] = [[0, 0], end.pos, ...extra];
+  const v = add(v1, v2);
+  const end = computeEnd(v, goal, dir);
+  // 物体から出る速度の矢印（1 m/s を 1 m で描く）も、出発時と終了時に画面に収まるようにする
+  const tips = (p: Vec): Vec[] => [p, add(p, v1), add(p, v2), add(p, v)];
+  const pts: Vec[] = [...tips([0, 0]), ...tips(end.pos), ...extra];
 
   const maxAlong = Math.max(...pts.map((p) => Math.abs(p[b])));
   const half = Math.max(MIN_HALF_ALONG, roundUp5(maxAlong + MARGIN));

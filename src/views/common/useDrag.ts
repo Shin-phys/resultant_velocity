@@ -3,9 +3,33 @@ import type { Vec } from '../../model/vector';
 import { clientToWorld } from './svg';
 
 interface DragCallbacks {
-  onStart?: () => void;
+  /** p：押した位置（物理の座標） */
+  onStart?: (p: Vec) => void;
   onMove: (p: Vec) => void;
   onEnd?: () => void;
+}
+
+/**
+ * ベクトルの先端をつかんで動かすドラッグ。押した位置と先端のずれを保つので、
+ * ハンドルの端をつかんでも先端が指の位置に飛ばない。
+ * tip()：今の先端の位置、onTip(p)：新しい先端の位置（スナップ前）
+ */
+export function useTipDrag(
+  svgRef: RefObject<SVGSVGElement | null>,
+  tip: () => Vec,
+  onTip: (p: Vec) => void,
+  extra: { onStart?: () => void; onEnd?: () => void } = {},
+) {
+  const grab = useRef<Vec>([0, 0]);
+  return useDrag(svgRef, {
+    onStart: (p) => {
+      const t = tip();
+      grab.current = [p[0] - t[0], p[1] - t[1]];
+      extra.onStart?.();
+    },
+    onMove: (p) => onTip([p[0] - grab.current[0], p[1] - grab.current[1]]),
+    onEnd: extra.onEnd,
+  });
 }
 
 /**
@@ -33,7 +57,7 @@ export function useDrag(svgRef: RefObject<SVGSVGElement | null>, cb: DragCallbac
       e.stopPropagation();
       active.current = true;
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-      cbRef.current.onStart?.();
+      if (svgRef.current) cbRef.current.onStart?.(clientToWorld(svgRef.current, e.clientX, e.clientY));
     },
     onPointerMove: move,
     onPointerUp: end,

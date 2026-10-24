@@ -1,14 +1,18 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { acrossAxis, banks, FLOW_UNIT } from '../../model/kinematics';
 import { fitAspect, viewportFor } from '../../model/viewport';
-import { add, collinearNormal, isZero, scale, snap, sub, type Vec } from '../../model/vector';
+import { add, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { riverSkin } from '../../skins/river';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
+import { Handle } from '../common/Handle';
 import { Arrow, fy, useElementSize } from '../common/svg';
-import { useDrag } from '../common/useDrag';
+import { useTipDrag } from '../common/useDrag';
 import { FlowControls } from './FlowControls';
 
-/** ① 場面ビュー（仕様 03）。上から見た平面図。 */
+/** 目盛りの数字の間隔の候補 [m] */
+const LABEL_STEPS = [5, 10, 20, 25, 50];
+
+/** ① イメージ図（仕様 03）。上から見た平面図。v₁ と v₂ の矢印の先端をドラッグして変えられる。 */
 export function SceneView() {
   const s = useAppState();
   const dispatch = useDispatch();
@@ -20,15 +24,12 @@ export function SceneView() {
   const v = add(v1, v2);
   const { sim, goal, flowDir, display } = s;
   const a = acrossAxis(flowDir);
+  const b = (1 - a) as 0 | 1;
   const [lo, hi] = banks(goal);
   const k = s.presentation ? 1.5 : 1;
 
-  // 表示範囲：軌跡が範囲外に出たときも収まるように、軌跡の端も含める
-  const extra = useMemo(() => {
-    const pts: Vec[] = [sim.pos];
-    for (const p of sim.groundTrail) pts.push(p);
-    return pts;
-  }, [sim.pos, sim.groundTrail]);
+  // 表示範囲：軌跡の端も含める
+  const extra = useMemo(() => [sim.pos, ...sim.groundTrail], [sim.pos, sim.groundTrail]);
   const computed = viewportFor(goal, flowDir, v1, v2, extra);
   // ドラッグ中は表示範囲を固定する（範囲が変わるとハンドルが指から逃げるため）
   const [frozen, setFrozen] = useState<typeof computed | null>(null);
@@ -38,10 +39,11 @@ export function SceneView() {
   const H = box.yMax - box.yMin;
   /** 1 px あたりの長さ [m] */
   const U = size.w > 0 ? W / size.w : W / 600;
+  const px = (n: number) => n * k * U;
 
-  const head = 12 * k * U;
-  const font = 14 * k * U;
-  const boatLen = Math.max(1.4, 30 * k * U);
+  const head = px(12);
+  const font = px(14);
+  const boatLen = Math.max(1.4, px(30));
 
   // 川の帯（横断方向は岸の間、流れの方向は画面いっぱい）
   const riverRect =
@@ -49,36 +51,48 @@ export function SceneView() {
       ? { x: box.xMin, y: -hi, width: W, height: hi - lo }
       : { x: lo, y: -box.yMax, width: hi - lo, height: H };
 
-  // 地面の目盛り線
+  // 地面の目盛り：画面が細かくなりすぎたら間引く
+  const pxPerM = 1 / U;
+  const labelStep = LABEL_STEPS.find((st) => st * pxPerM >= (b === 0 ? 36 : 24)) ?? 100;
+  const minorOn = pxPerM >= 7;
+  const strongStep = 5 * pxPerM >= 12 ? 5 : labelStep;
   const gridLines = useMemo(() => {
     const lines: { x1: number; y1: number; x2: number; y2: number; strong: boolean }[] = [];
-    for (let x = Math.ceil(box.xMin); x <= box.xMax; x++)
-      lines.push({ x1: x, y1: -box.yMax, x2: x, y2: -box.yMin, strong: x % 5 === 0 });
-    for (let y = Math.ceil(box.yMin); y <= box.yMax; y++)
-      lines.push({ x1: box.xMin, y1: -y, x2: box.xMax, y2: -y, strong: y % 5 === 0 });
+    const step = minorOn ? 1 : strongStep;
+    for (let x = Math.ceil(box.xMin / step) * step; x <= box.xMax; x += step)
+      lines.push({ x1: x, y1: -box.yMax, x2: x, y2: -box.yMin, strong: x % strongStep === 0 });
+    for (let y = Math.ceil(box.yMin / step) * step; y <= box.yMax; y += step)
+      lines.push({ x1: box.xMin, y1: -y, x2: box.xMax, y2: -y, strong: y % strongStep === 0 });
     return lines;
-  }, [box.xMin, box.xMax, box.yMin, box.yMax]);
+  }, [box.xMin, box.xMax, box.yMin, box.yMax, minorOn, strongStep]);
 
-  // 岸に沿った目盛りの数字（5 m ごと）
+  // 岸に沿った目盛りの数字（画面の端で切れるものは出さない）
   const bankLabels = useMemo(() => {
-    const out: { p: Vec; text: string }[] = [];
-    const b = 1 - a;
+    const out: { x: number; y: number; text: string; anchor: 'start' | 'middle' | 'end' }[] = [];
     const min = b === 0 ? box.xMin : box.yMin;
     const max = b === 0 ? box.xMax : box.yMax;
-    for (let t = Math.ceil(min / 5) * 5; t <= max; t += 5) {
-      for (const [edge, side] of [
-        [lo, -1],
-        [hi, 1],
-      ] as const) {
-        const off = side * font * 0.9;
+    const margin = font * (b === 0 ? 1.2 : 0.7);
+    for (let t = Math.ceil(min / labelStep) * labelStep; t <= max; t += labelStep) {
+      if (t - min < margin || max - t < margin) continue;
+      for (const side of [-1, 1] as const) {
+        const edge = side < 0 ? lo : hi;
         const p: [number, number] = [0, 0];
         p[b] = t;
-        p[a] = edge + off;
-        out.push({ p, text: `${t}` });
+        if (a === 1) {
+          // 横向きの川：岸の外側（上下）に中央ぞろえ
+          p[a] = edge + side * font * 0.9;
+          const [x, y] = fy(p);
+          out.push({ x, y, text: `${t}`, anchor: 'middle' });
+        } else {
+          // 縦向きの川：岸の外側（左右）に寄せる
+          p[a] = edge + side * font * 0.4;
+          const [x, y] = fy(p);
+          out.push({ x, y, text: `${t}`, anchor: side < 0 ? 'end' : 'start' });
+        }
       }
     }
     return out;
-  }, [a, box.xMin, box.xMax, box.yMin, box.yMax, lo, hi, font]);
+  }, [a, b, box.xMin, box.xMax, box.yMin, box.yMax, lo, hi, font, labelStep]);
 
   // 媒質シートのずれ（タイルの大きさで割った余り）
   const T = riverSkin.tile;
@@ -90,36 +104,52 @@ export function SceneView() {
   const angle = (-Math.atan2(headingVec[1], headingVec[0]) * 180) / Math.PI;
   const [bx, by] = fy(sim.pos);
 
+  // 矢印が重なる配置（同一直線上、または v₂ = 0）のときは、v₂ と v を両側へずらす
+  const nrm = overlapNormal(v1, v2);
+  const offV2: Vec = nrm ? scale(nrm, px(13)) : [0, 0];
+  const offV: Vec = nrm ? scale(nrm, -px(13)) : [0, 0];
+  const shiftV1: Vec | undefined = nrm ? [0, 0] : undefined;
+  const shiftV2: Vec | undefined = nrm ? scale(nrm, font * 1.3) : undefined;
+  const shiftV: Vec | undefined = nrm ? scale(nrm, -font * 1.3) : undefined;
+
   const v1Tip = add(sim.pos, v1);
-  // 同一直線上（段階1）のときは矢印を少しずらして重ならないようにする
-  const nrm = collinearNormal(v1, v2);
-  const offV2: Vec = nrm ? scale(nrm, font * 0.8) : [0, 0];
-  const offV: Vec = nrm ? scale(nrm, -font * 0.8) : [0, 0];
-  const drag = useDrag(svgRef, {
-    onStart: () => setFrozen(computed),
-    onEnd: () => setFrozen(null),
-    onMove: (p) => dispatch({ type: 'setV1', v: snap(sub(p, sim.pos)) }),
-  });
+  const v2Tip = add(add(sim.pos, v2), offV2);
+  // v₂ = 0 のときのハンドル：流れの向き（v₁ と平行ならその横）に少し離して置く
+  const flowU = FLOW_UNIT[flowDir];
+  const zeroDir: Vec = isParallel(flowU, v1) && nrm ? nrm : flowU;
+  const v2Handle: Vec = isZero(v2) ? add(sim.pos, scale(zeroDir, px(26))) : v2Tip;
+
+  const freeze = { onStart: () => setFrozen(computed), onEnd: () => setFrozen(null) };
+  const dragV1 = useTipDrag(
+    svgRef,
+    () => v1Tip,
+    (p) => dispatch({ type: 'setV1', v: snap(sub(p, sim.pos)) }),
+    freeze,
+  );
+  const dragV2 = useTipDrag(
+    svgRef,
+    // 実際の先端（ずらす前）を基準にするので、押しただけでは値が変わらない
+    () => add(sim.pos, v2),
+    (p) => dispatch({ type: 'setV2', v: snap(sub(p, sim.pos)) }),
+    freeze,
+  );
 
   const mediumPts = sim.mediumTrail.map((p) => fy(add(p, sim.sheet)).join(',')).join(' ');
   const groundPts = sim.groundTrail.map((p) => fy(p).join(',')).join(' ');
   const waterStart = fy(sim.sheet);
+  const sceneH = Math.round(Math.max(220, Math.min(440, size.w * ((base.yMax - base.yMin) / (base.xMax - base.xMin)))));
 
   return (
-    <section className="pane scene-pane" aria-label="① 場面">
+    <section className="pane scene-pane" aria-label="① イメージ図">
       <header className="pane-head">
-        <h2>① 場面</h2>
+        <h2>① イメージ図</h2>
         <FlowControls />
       </header>
       <div
         className="scene-box"
         ref={boxRef}
-        style={
-          {
-            // 狭い画面では、川の縦横比に合わせて高さを決める（CSS 側で使う）
-            '--scene-h': `${Math.round(Math.max(220, Math.min(440, size.w * ((base.yMax - base.yMin) / (base.xMax - base.xMin)))))}px`,
-          } as CSSProperties
-        }
+        // 狭い画面では、川の縦横比に合わせて高さを決める（CSS 側で使う）
+        style={{ '--scene-h': `${sceneH}px` } as CSSProperties}
       >
         <svg
           ref={svgRef}
@@ -163,29 +193,34 @@ export function SceneView() {
             const p2: [number, number] = [0, 0];
             p1[a] = edge;
             p2[a] = edge;
-            p1[1 - a] = a === 1 ? box.xMin : box.yMin;
-            p2[1 - a] = a === 1 ? box.xMax : box.yMax;
+            p1[b] = b === 0 ? box.xMin : box.yMin;
+            p2[b] = b === 0 ? box.xMax : box.yMax;
             const [x1, y1] = fy(p1);
             const [x2, y2] = fy(p2);
             return <line key={edge} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--bank)" strokeWidth={3 * k} vectorEffect="non-scaling-stroke" />;
           })}
-          {bankLabels.map(({ p, text }, i) => {
-            const [x, y] = fy(p);
-            return (
-              <text key={i} x={x} y={y} fontSize={font * 0.8} fill="var(--muted)" textAnchor="middle" dominantBaseline="middle">
-                {text}
-              </text>
-            );
-          })}
+          {bankLabels.map((l, i) => (
+            <text key={i} x={l.x} y={l.y} fontSize={font * 0.8} fill="var(--muted)" textAnchor={l.anchor} dominantBaseline="middle">
+              {l.text}
+            </text>
+          ))}
 
           {/* 出発点 */}
-          <circle cx={0} cy={0} r={5 * k * U} fill="none" stroke="var(--text)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          <circle cx={0} cy={0} r={px(5)} fill="none" stroke="var(--text)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 
-          {/* 媒質に対する軌跡（シートと一緒に流れる） */}
-          {display.mediumTrail && sim.t > 0 && (
-            <g clipPath="url(#river-clip)">
-              <polyline points={mediumPts} fill="none" stroke="var(--c-v1)" strokeWidth={2 * k} strokeDasharray={`${3 * k} ${4 * k}`} vectorEffect="non-scaling-stroke" />
-              <circle cx={waterStart[0]} cy={waterStart[1]} r={5 * k * U} fill="none" stroke="var(--c-v1)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+          {/* 水に対する軌跡（シートと一緒に流れる） */}
+          {display.trails && sim.t > 0 && (
+            <g>
+              <polyline
+                clipPath="url(#river-clip)"
+                points={mediumPts}
+                fill="none"
+                stroke="var(--c-v1)"
+                strokeWidth={2 * k}
+                strokeDasharray={`${3 * k} ${4 * k}`}
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle cx={waterStart[0]} cy={waterStart[1]} r={px(5)} fill="none" stroke="var(--c-v1)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
               <text
                 x={waterStart[0] + (a === 0 ? font * 0.6 : 0)}
                 y={waterStart[1] + (a === 1 ? -font * 1.1 : font * 1.3)}
@@ -199,14 +234,14 @@ export function SceneView() {
             </g>
           )}
 
-          {/* 地面に対する軌跡 */}
-          {display.groundTrail && sim.t > 0 && (
+          {/* 地面に対する軌跡と1秒ごとの点 */}
+          {display.trails && sim.t > 0 && (
             <polyline points={groundPts} fill="none" stroke="var(--c-v)" strokeWidth={2.5 * k} vectorEffect="non-scaling-stroke" />
           )}
-          {display.strobes &&
+          {display.trails &&
             sim.strobes.map((p, i) => {
               const [x, y] = fy(p);
-              return <circle key={i} cx={x} cy={y} r={3.5 * k * U} fill="var(--c-v)" />;
+              return <circle key={i} cx={x} cy={y} r={px(3.5)} fill="var(--c-v)" />;
             })}
 
           {/* 物体 */}
@@ -223,59 +258,24 @@ export function SceneView() {
           {/* 速度の矢印（1 m/s を 1 m の長さで描く） */}
           {display.sceneArrows && (
             <g>
-              <Arrow from={add(sim.pos, offV2)} to={add(add(sim.pos, v2), offV2)} color="var(--c-v2)" width={3 * k} head={head} label="v₂" fontSize={font} />
-              <Arrow from={sim.pos} to={v1Tip} color="var(--c-v1)" width={3 * k} head={head} label="v₁" fontSize={font} />
-              <Arrow from={add(sim.pos, offV)} to={add(add(sim.pos, v), offV)} color="var(--c-v)" width={4 * k} head={head * 1.1} label="v" fontSize={font} />
-              <circle
-                className="handle"
-                cx={fy(v1Tip)[0]}
-                cy={fy(v1Tip)[1]}
-                r={11 * k * U}
-                fill="var(--c-v1)"
-                fillOpacity={0.18}
-                stroke="var(--c-v1)"
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-                {...drag}
-              >
-                <title>ドラッグで v₁（物体の速度）を変える</title>
-              </circle>
+              <Arrow from={add(sim.pos, offV2)} to={v2Tip} color="var(--c-v2)" width={3 * k} head={head} label="v₂" fontSize={font} labelShift={shiftV2} />
+              <Arrow from={sim.pos} to={v1Tip} color="var(--c-v1)" width={3 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} />
+              <Arrow
+                from={add(sim.pos, offV)}
+                to={add(add(sim.pos, v), offV)}
+                color="var(--c-v)"
+                width={4 * k}
+                head={head * 1.1}
+                label="v"
+                fontSize={font}
+                labelShift={shiftV}
+              />
+              <Handle at={v2Handle} r={px(11)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れの速度）を変える。上下左右にだけ動く" />
+              <Handle at={v1Tip} r={px(11)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁（物体の速度）を変える" />
             </g>
           )}
-
-          {/* 流れの向きの表示（左上） */}
-          <FlowBadge
-            at={[box.xMin + font * 0.8, box.yMax - font * 1.2]}
-            dir={FLOW_UNIT[flowDir]}
-            speed={s.flowSpeed}
-            font={font}
-            head={head}
-            k={k}
-          />
         </svg>
       </div>
     </section>
-  );
-}
-
-function FlowBadge({ at, dir, speed, font, head, k }: { at: Vec; dir: Vec; speed: number; font: number; head: number; k: number }) {
-  const [x, y] = fy(at);
-  const len = font * 2.4;
-  const c: Vec = [at[0] + font * 6.6, at[1]];
-  return (
-    <g>
-      <text x={x} y={y} fontSize={font} fill="var(--c-v2)" dominantBaseline="middle" fontWeight={700} className="svg-label">
-        流れ {speed} m/s
-      </text>
-      {speed > 0 && (
-        <Arrow
-          from={[c[0] - (dir[0] * len) / 2, c[1] - (dir[1] * len) / 2]}
-          to={[c[0] + (dir[0] * len) / 2, c[1] + (dir[1] * len) / 2]}
-          color="var(--c-v2)"
-          width={3 * k}
-          head={head}
-        />
-      )}
-    </g>
   );
 }
