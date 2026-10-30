@@ -30,7 +30,10 @@ export type Action =
   | { type: 'reset' }
   | { type: 'setSpeed'; speed: 1 | 2 }
   | { type: 'tick'; dt: number }
-  | { type: 'loadPreset'; id: string; v1: Vec; v2: Vec; goal: Goal }
+  | { type: 'loadPreset'; id: string; v1: Vec; v2: Vec; goal: Goal; a1?: Vec; a2?: Vec; accel?: boolean }
+  /** 加速度（仕様 12）。a₂ は流れの軸の成分だけが使われる */
+  | { type: 'setA1'; v: Vec }
+  | { type: 'setA2'; v: Vec }
   /** 合成速度 v を出す。at は出し始めた時刻（performance.now() の値） */
   | { type: 'revealV'; at: number }
   /** 合成速度 v をまた隠す（次の予想のため） */

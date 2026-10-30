@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { PRESET_GROUPS, PRESETS } from '../data/presets';
+import { ACCEL_GROUP, PRESET_GROUPS, PRESETS } from '../data/presets';
 import type { DisplayOptions } from '../state/actions';
 import { useAppState, useDispatch } from '../state/store';
 
@@ -48,7 +48,17 @@ export function Header() {
             aria-label="例を選ぶ"
             onChange={(e) => {
               const p = PRESETS.find((q) => q.id === e.target.value);
-              if (p) dispatch({ type: 'loadPreset', id: p.id, v1: p.v1, v2: p.v2, goal: p.goal });
+              if (p)
+                dispatch({
+                  type: 'loadPreset',
+                  id: p.id,
+                  v1: p.v1,
+                  v2: p.v2,
+                  goal: p.goal,
+                  a1: p.a1,
+                  a2: p.a2,
+                  accel: p.group === ACCEL_GROUP,
+                });
             }}
           >
             {s.presetId === null && <option value="">自由に設定中</option>}

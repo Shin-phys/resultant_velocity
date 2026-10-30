@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { add, formatComponent, formatLength, type Vec } from '../../model/vector';
+import { acrossAxis } from '../../model/kinematics';
 import { useAppState, useDispatch, v2Of, V_MAX } from '../../state/store';
 
 /** 全角数字・各種マイナス記号を受け付けて整数にする。整数でなければ null。 */
@@ -48,11 +49,22 @@ export function TableView() {
     dispatch({ type: 'setV2', v: next });
   };
 
+  const setA1 = (i: 0 | 1, n: number) => {
+    const next: [number, number] = [s.a1[0], s.a1[1]];
+    next[i] = n;
+    dispatch({ type: 'setA1', v: next });
+  };
+  const setA2 = (i: 0 | 1, n: number) => {
+    const next: [number, number] = [0, 0];
+    next[i] = n;
+    dispatch({ type: 'setA2', v: next });
+  };
+
   return (
     <section className="pane table-pane" aria-label="③ 成分表">
       <header className="pane-head">
         <h2>③ 成分表</h2>
-        <span className="hint">→ と ↑ が正</span>
+        <span className="hint">→ と ↑ が正{s.accelOn ? '。速度は t = 0 のときの値' : ''}</span>
       </header>
       <div className="table-box">
         <table className="comp-table">
@@ -79,6 +91,29 @@ export function TableView() {
             </tr>
             <Row sign="" sym="v" name="合成（地面に対して）" cls="c-v" vec={v} readOnly strong hidden={!s.vShown} />
           </tbody>
+          {s.accelOn && (
+            <tbody className="accel-rows">
+              <tr className="sub-head">
+                <th scope="col" />
+                <th scope="col" />
+                <th scope="col">
+                  ax <small>[m/s²]</small>
+                </th>
+                <th scope="col">
+                  ay <small>[m/s²]</small>
+                </th>
+                <th scope="col">
+                  大きさ <small>[m/s²]</small>
+                </th>
+              </tr>
+              <Row sign="" sym="a₁" name="物体（水に対して）" cls="c-v1" vec={s.a1} onSet={setA1} />
+              <Row sign="＋" sym="a₂" name="流れ" cls="c-v2" vec={s.a2} onSet={setA2} lock={acrossAxis(s.flowDir)} />
+              <tr className="sum-rule" aria-hidden="true">
+                <td colSpan={5} />
+              </tr>
+              <Row sign="" sym="a" name="合成（地面に対して）" cls="c-v" vec={add(s.a1, s.a2)} readOnly strong hidden={!s.vShown} />
+            </tbody>
+          )}
         </table>
         <p className="table-notice" role="status" aria-live="polite">
           {notice ?? ' '}
@@ -98,9 +133,11 @@ function Row(props: {
   strong?: boolean;
   /** 値を伏せて「？」を出す（合成速度 v を出す前） */
   hidden?: boolean;
+  /** この成分だけ入力できないようにする（a₂ の、流れと垂直な成分） */
+  lock?: 0 | 1;
   onSet?: (i: 0 | 1, n: number) => void;
 }) {
-  const { sign, sym, name, cls, vec, readOnly, strong, hidden, onSet } = props;
+  const { sign, sym, name, cls, vec, readOnly, strong, hidden, lock, onSet } = props;
   return (
     <tr className={strong ? 'row-sum' : undefined}>
       <td className="sign">{sign}</td>
@@ -110,7 +147,7 @@ function Row(props: {
       </th>
       {([0, 1] as const).map((i) => (
         <td key={i}>
-          {readOnly ? (
+          {readOnly || i === lock ? (
             <span className={`cell-ro ${cls}`}>{hidden ? '？' : formatComponent(vec[i])}</span>
           ) : (
             <Cell value={vec[i]} label={`${sym} の ${i === 0 ? 'x' : 'y'} 成分`} onCommit={(n) => onSet?.(i, n)} />

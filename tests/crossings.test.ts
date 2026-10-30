@@ -44,3 +44,45 @@ describe('渡った記録', () => {
     expect(s.vShown).toBe(false);
   });
 });
+
+describe('加速度のある例（仕様 12）', () => {
+  it('流れが止まっている例でも、流れの向きは a₂ から決まる', () => {
+    const s0 = reducer(initialState, { type: 'setFlowDir', dir: 'down' });
+    const s = reducer(s0, {
+      type: 'loadPreset',
+      id: 'flowAccel',
+      v1: [0, 4],
+      v2: [0, 0],
+      a2: [1, 0],
+      goal: { kind: 'crossBank', width: 12 },
+      accel: true,
+    });
+    expect(s.flowDir).toBe('right');
+    expect(s.flowSpeed).toBe(0);
+    expect(s.a2).toEqual([1, 0]);
+    expect(s.accelOn).toBe(true);
+  });
+
+  it('流れが加速しても渡る時間は同じ（記録で確かめる）', () => {
+    let s = reducer(initialState, { type: 'setA2', v: [2, 0] });
+    s = playToEnd(s);
+    s = playToEnd(reducer(s, { type: 'setA2', v: [0, 0] }));
+    expect(s.crossings).toHaveLength(2);
+    expect(s.crossings[0].t).toBeCloseTo(s.crossings[1].t, 9);
+    expect(s.crossings[1].drift).toBeGreaterThan(s.crossings[0].drift);
+  });
+
+  it('a₂ は流れの軸の成分だけ残り、川の向きが変わると 0 に戻る', () => {
+    let s = reducer(initialState, { type: 'setA2', v: [2, 3] });
+    expect(s.a2).toEqual([2, 0]);
+    s = reducer(s, { type: 'setFlowDir', dir: 'up' });
+    expect(s.a2).toEqual([0, 0]);
+  });
+
+  it('加速度のない例を選ぶと加速度は 0 に戻る', () => {
+    let s = reducer(initialState, { type: 'setA1', v: [0, 2] });
+    s = reducer(s, { type: 'loadPreset', id: 'straight', v1: [0, 4], v2: [3, 0], goal: { kind: 'crossBank', width: 12 } });
+    expect(s.a1).toEqual([0, 0]);
+    expect(s.accelOn).toBe(false);
+  });
+});

@@ -1,5 +1,5 @@
-import { acrossAxis, banks, computeEnd, type FlowDir, type Goal } from './kinematics';
-import { add, type Vec } from './vector';
+import { acrossAxis, banks, computeEnd, type FlowDir, type Goal, velocityAt } from './kinematics';
+import { add, type Vec, ZERO } from './vector';
 
 export interface Box {
   xMin: number;
@@ -21,14 +21,26 @@ const roundUp5 = (x: number) => Math.ceil(x / 5) * 5;
  * - 横断方向は岸の間＋余白。
  * extra には軌跡の端点など、必ず画面に入れたい点を渡す。
  */
-export function viewportFor(goal: Goal, dir: FlowDir, v1: Vec, v2: Vec, extra: readonly Vec[] = []): Box {
+export function viewportFor(
+  goal: Goal,
+  dir: FlowDir,
+  v1: Vec,
+  v2: Vec,
+  extra: readonly Vec[] = [],
+  a1: Vec = ZERO,
+  a2: Vec = ZERO,
+): Box {
   const a = acrossAxis(dir);
   const b = (1 - a) as 0 | 1;
-  const v = add(v1, v2);
-  const end = computeEnd(v, goal, dir);
-  // 物体から出る速度の矢印（1 m/s を 1 m で描く）も、出発時と終了時に画面に収まるようにする
-  const tips = (p: Vec): Vec[] => [p, add(p, v1), add(p, v2), add(p, v)];
-  const pts: Vec[] = [...tips([0, 0]), ...tips(end.pos), ...extra];
+  const end = computeEnd(add(v1, v2), goal, dir, add(a1, a2));
+  // 物体から出る速度の矢印（1 m/s を 1 m で描く）も、出発時と終了時に画面に収まるようにする。
+  // 加速度があると終了時の速度は初めと違う（仕様 12）
+  const tips = (p: Vec, t: number): Vec[] => {
+    const u1 = velocityAt(v1, a1, t);
+    const u2 = velocityAt(v2, a2, t);
+    return [p, add(p, u1), add(p, u2), add(p, add(u1, u2))];
+  };
+  const pts: Vec[] = [...tips([0, 0], 0), ...tips(end.pos, end.t), ...extra];
 
   const maxAlong = Math.max(...pts.map((p) => Math.abs(p[b])));
   const half = Math.max(MIN_HALF_ALONG, roundUp5(maxAlong + MARGIN));

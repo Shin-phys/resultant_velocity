@@ -30,6 +30,9 @@ export function StatusBar() {
             ? `${s.goal.t}秒たつ前に画面の端まで来たので止めました（${at}）。`
             : `向こう岸に着く前に画面の端まで来たので止めました（${at}）。`;
         break;
+      case 'returned':
+        msg = `向こう岸に着く前に、元の岸に戻ってきたので止めました（${at}）。`;
+        break;
       case 'noCross':
         msg = '合成速度 v に向こう岸へ向かう成分がないため、出発できません。v₁ の向きを変えてみよう。';
         break;
@@ -42,7 +45,7 @@ export function StatusBar() {
   }
 
   // v を出した直後は、赤い跡と v の向きを見比べるよう促す
-  if (f && f.reason !== 'noCross' && f.reason !== 'limit') msg += ' 赤い矢印 v（合成速度）と赤い跡の向きを見比べよう。';
+  if (f && f.reason !== 'noCross' && f.reason !== 'limit' && f.reason !== 'returned') msg += ' 赤い矢印 v（合成速度）と赤い跡の向きを見比べよう。';
 
   return (
     <p className="statusbar" role="status" aria-live="polite">

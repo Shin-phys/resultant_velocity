@@ -12,9 +12,9 @@ export interface VecLabelText {
   value: string | null;
 }
 
-export const vecLabelText = (sym: string, vec: Vec, showValue: boolean): VecLabelText => ({
+export const vecLabelText = (sym: string, vec: Vec, showValue: boolean, unit = 'm/s'): VecLabelText => ({
   sym,
-  value: showValue ? `= ${formatLength(vec)} m/s` : null,
+  value: showValue ? `= ${formatLength(vec)} ${unit}` : null,
 });
 
 /** ラベルの幅と高さ（世界座標） */

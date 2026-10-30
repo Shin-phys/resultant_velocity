@@ -40,6 +40,7 @@ main に push すると GitHub Actions がテストとビルドを行い、GitHu
 | [09_judging-and-feedback.md](docs/spec/09_judging-and-feedback.md) | 判定、誤答診断、学習記録 |
 | [10_tech-stack.md](docs/spec/10_tech-stack.md) | 技術構成とディレクトリ構成 |
 | [11_roadmap.md](docs/spec/11_roadmap.md) | 開発フェーズと未決事項 |
+| [12_acceleration.md](docs/spec/12_acceleration.md) | 加速度のある合成（放物線・直線になる場合） |
 
 ## 関連
 

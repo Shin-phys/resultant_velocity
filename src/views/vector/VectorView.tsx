@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { axisAlign, FLOW_UNIT } from '../../model/kinematics';
+import { axisAlign, computeEnd, FLOW_UNIT, velocityAt } from '../../model/kinematics';
 import { add, clampBox, formatComponent, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
@@ -27,17 +27,29 @@ export function VectorView() {
   const [boxRef, size] = useElementSize<HTMLDivElement>();
   const k = s.presentation ? 1.5 : 1;
 
-  const v1 = s.v1;
-  const v2 = v2Of(s);
+  const v1i = s.v1;
+  const v2i = v2Of(s);
+  // その時刻の速度を描く（加速度があると変わる。仕様 12 §4）
+  const v1 = velocityAt(v1i, s.a1, s.sim.t);
+  const v2 = velocityAt(v2i, s.a2, s.sim.t);
   const v = add(v1, v2);
+  const a1 = s.a1;
+  const a2 = s.a2;
+  const acc = add(a1, a2);
+  const hasAccel = !isZero(a1) || !isZero(a2);
+  const canDrag = !(hasAccel && s.sim.t > 0);
   const phase = useRevealPhase(s.vShown, s.revealAt);
   const done = s.vShown && phase.draw >= 1;
   /** v₂ の始点：隠している間は原点、出すときに v₁ の先端へ滑る */
   const v2Base: Vec = scale(v1, phase.slide);
   const v2End = add(v2Base, v2);
 
-  // 方眼の範囲：矢印が収まる大きさ。ドラッグ中は固定する
-  const needed = Math.max(GRID_MIN, ...[...v1, ...v2, ...v].map((c) => Math.abs(c) + 1));
+  // 方眼の範囲：初めと終わりの速度、加速度の矢印が収まる大きさ（再生中に縮尺が変わらないように）。
+  // ドラッグ中は固定する
+  const endT = hasAccel ? computeEnd(add(v1i, v2i), s.goal, s.flowDir, acc).t : 0;
+  const atEnd = (v0: Vec, a0: Vec) => velocityAt(v0, a0, endT);
+  const reach = [v1i, v2i, add(v1i, v2i), atEnd(v1i, a1), atEnd(v2i, a2), atEnd(add(v1i, v2i), acc), a1, add(a1, a2)];
+  const needed = Math.max(GRID_MIN, ...reach.flat().map((c) => Math.ceil(Math.abs(c)) + 1));
   const [frozenR, setFrozenR] = useState<number | null>(null);
   const R = frozenR ?? needed;
   const span = 2 * (R + PAD);
@@ -89,6 +101,13 @@ export function VectorView() {
   const segV1: [Vec, Vec] = [[0, 0], v1];
   const segV2: [Vec, Vec] = [add(v2Base, offV2), add(v2End, offV2)];
   const segV: [Vec, Vec] = [offV, add(scale(v, phase.draw), offV)];
+  // 加速度は速度と同じつなぎ方で点線（仕様 12 §4）。a は v と同じく出すまで描かない
+  const segA1: [Vec, Vec] = [[0, 0], a1];
+  const segA2: [Vec, Vec] = [a1, add(a1, a2)];
+  const segA: [Vec, Vec] = [[0, 0], acc];
+  const accSegs: [Vec, Vec][] = hasAccel
+    ? [...(isZero(a1) ? [] : [segA1]), ...(isZero(a2) ? [] : [segA2]), ...(done && !isZero(acc) ? [segA] : [])]
+    : [];
   const drawn: [Vec, Vec][] = [segV1, segV2, ...(phase.draw > 0 ? [segV] : [])];
   const mid = (sg: [Vec, Vec]): Vec => [(sg[0][0] + sg[1][0]) / 2, (sg[0][1] + sg[1][1]) / 2];
   const center: Vec = drawn.reduce<Vec>((c, sg) => add(c, scale(mid(sg), 1 / drawn.length)), [0, 0]);
@@ -108,6 +127,17 @@ export function VectorView() {
   if (!isZero(v2)) {
     reqs.push(vecLabelRequest('v2', tV2, font, segV2[0], segV2[1], sideOf(segV2, nrm)));
     texts.v2 = { t: tV2, color: 'var(--c-v2)', font };
+  }
+  if (hasAccel) {
+    const addA = (key: string, sym: string, vec: Vec, sg: [Vec, Vec], color: string) => {
+      if (isZero(vec)) return;
+      const t = vecLabelText(sym, vec, magnitudes, 'm/s²');
+      reqs.push(vecLabelRequest(key, t, font * 0.9, sg[0], sg[1], sub(mid(sg), center)));
+      texts[key] = { t, color, font: font * 0.9 };
+    };
+    if (done) addA('a', 'a', acc, segA, 'var(--c-v)');
+    addA('a1', 'a₁', a1, segA1, 'var(--c-v1)');
+    addA('a2', 'a₂', a2, segA2, 'var(--c-v2)');
   }
   // 成分の点線には成分の値を添える
   if (components) {
@@ -131,9 +161,13 @@ export function VectorView() {
   }
   const handleR = px(12);
   const obstacles: Obstacle[] = [
-    ...drawn.map(([a, b]): Obstacle => ({ kind: 'seg', a, b })),
-    { kind: 'rect', r: circleRect(v1, handleR) },
-    { kind: 'rect', r: circleRect(v2Handle, handleR) },
+    ...[...drawn, ...accSegs].map(([a, b]): Obstacle => ({ kind: 'seg', a, b })),
+    ...(canDrag
+      ? [
+          { kind: 'rect', r: circleRect(v1, handleR) } as Obstacle,
+          { kind: 'rect', r: circleRect(v2Handle, handleR) } as Obstacle,
+        ]
+      : []),
     { kind: 'rect', r: circleRect([0, 0], px(5)) },
   ];
   const placed = placeLabels(reqs, obstacles, { x0: -R - PAD, y0: -R - PAD, x1: R + PAD, y1: R + PAD }, px(2));
@@ -142,7 +176,9 @@ export function VectorView() {
     <section className="pane vector-pane" aria-label="② ベクトル図">
       <header className="pane-head">
         <h2>② ベクトル図</h2>
-        <span className="hint">1マス＝1 m/s</span>
+        <span className="hint">
+          {hasAccel ? `t = ${s.sim.t.toFixed(1)} s の速度　1マス＝1 m/s、1 m/s²` : '1マス＝1 m/s'}
+        </span>
         {s.vShown ? (
           <button className="btn small quiet" onClick={() => dispatch({ type: 'hideV' })} title="次の予想のために v をまた隠す">
             v を隠す
@@ -198,6 +234,13 @@ export function VectorView() {
             </g>
           )}
 
+          {/* 加速度（点線） */}
+          {hasAccel && !isZero(a1) && <Arrow from={segA1[0]} to={segA1[1]} color="var(--c-v1)" width={2 * k} head={head * 0.9} dashed opacity={0.85} />}
+          {hasAccel && !isZero(a2) && <Arrow from={segA2[0]} to={segA2[1]} color="var(--c-v2)" width={2 * k} head={head * 0.9} dashed opacity={0.85} />}
+          {hasAccel && done && !isZero(acc) && (
+            <Arrow from={segA[0]} to={segA[1]} color="var(--c-v)" width={2.5 * k} head={head} dashed opacity={0.85} />
+          )}
+
           <Arrow from={segV1[0]} to={segV1[1]} color="var(--c-v1)" width={3.5 * k} head={head} />
           <Arrow from={segV2[0]} to={segV2[1]} color="var(--c-v2)" width={3.5 * k} head={head} />
           {/* 再生中は v を明滅させ、① の地面に対する軌跡と同じ向きだと気づかせる（仕様 04 §6） */}
@@ -213,8 +256,12 @@ export function VectorView() {
             <VecLabel key={pl.key} at={pl.center} {...texts[pl.key]} />
           ))}
 
-          <Handle at={v2Handle} r={px(12)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れ）を変える。上下左右にだけ動く" />
+          {canDrag && (
+            <>
+              <Handle at={v2Handle} r={px(12)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れ）を変える。上下左右にだけ動く" />
           <Handle at={v1} r={px(12)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁ を変える" />
+            </>
+          )}
         </svg>
       </div>
     </section>

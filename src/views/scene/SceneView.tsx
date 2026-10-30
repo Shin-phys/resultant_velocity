@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { acrossAxis, banks, computeEnd, FLOW_UNIT } from '../../model/kinematics';
+import { acrossAxis, banks, computeEnd, FLOW_UNIT, velocityAt } from '../../model/kinematics';
 import { fitAspect, viewportFor } from '../../model/viewport';
 import { add, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { riverSkin } from '../../skins/river';
@@ -23,9 +23,15 @@ export function SceneView() {
   const [boxRef, size] = useElementSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const v1 = s.v1;
-  const v2 = v2Of(s);
+  const v1i = s.v1;
+  const v2i = v2Of(s);
+  // ① に描くのはその時刻の速度（加速度があると変わる。仕様 12 §4）
+  const v1 = velocityAt(v1i, s.a1, s.sim.t);
+  const v2 = velocityAt(v2i, s.a2, s.sim.t);
   const v = add(v1, v2);
+  const hasAccel = !isZero(s.a1) || !isZero(s.a2);
+  // 加速度があるとき、t > 0 の矢印はその時刻の速度なので、つかんでも初速度は変えられない
+  const canDrag = !(hasAccel && s.sim.t > 0);
   const { sim, goal, flowDir, display } = s;
   // 合成速度 v は再生が終わるまで出さない（仕様 06「合成速度 v を出すタイミング」）
   const phase = useRevealPhase(s.vShown, s.revealAt);
@@ -36,7 +42,7 @@ export function SceneView() {
 
   // 表示範囲：軌跡の端も含める
   const extra = useMemo(() => [sim.pos, ...sim.groundTrail], [sim.pos, sim.groundTrail]);
-  const computed = viewportFor(goal, flowDir, v1, v2, extra);
+  const computed = viewportFor(goal, flowDir, v1i, v2i, extra, s.a1, s.a2);
   // ドラッグ中は表示範囲を固定する（範囲が変わるとハンドルが指から逃げるため）
   const [frozen, setFrozen] = useState<typeof computed | null>(null);
   const base = frozen ?? computed;
@@ -106,7 +112,7 @@ export function SceneView() {
   const sy = ((-sim.sheet[1] % T) + T) % T;
 
   // 船首の向き（v₁ が 0 のときは横断方向）
-  const headingVec: Vec = isZero(v1) ? (a === 1 ? [0, 1] : [1, 0]) : v1;
+  const headingVec: Vec = !isZero(v1) ? v1 : !isZero(s.a1) ? s.a1 : a === 1 ? [0, 1] : [1, 0];
   const angle = (-Math.atan2(headingVec[1], headingVec[0]) * 180) / Math.PI;
   const [bx, by] = fy(sim.pos);
 
@@ -145,7 +151,7 @@ export function SceneView() {
   const dimText = `川幅 ${goal.width} m`;
   const dimW = textEm(dimText) * dimFont + dimFont * 0.4;
   const dimH = dimFont * 1.2;
-  const endAlong = computeEnd(v, goal, flowDir).pos[b];
+  const endAlong = computeEnd(add(v1i, v2i), goal, flowDir, add(s.a1, s.a2)).pos[b];
   const atMin = endAlong >= 0; // 流されるのが + 側なら − 側の端に置く
   const edgeIn = font * 1.4; // 画面の端から寸法線までの距離
   const dim = (() => {
@@ -341,8 +347,12 @@ export function SceneView() {
               <Arrow from={segV2[0]} to={segV2[1]} color="var(--c-v2)" width={3 * k} head={head} />
               <Arrow from={segV1[0]} to={segV1[1]} color="var(--c-v1)" width={3 * k} head={head} />
               {phase.draw > 0 && <Arrow from={segV[0]} to={segV[1]} color="var(--c-v)" width={4 * k} head={head * 1.1} />}
-              <Handle at={v2Handle} r={px(11)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れの速度）を変える。上下左右にだけ動く" />
-              <Handle at={v1Tip} r={px(11)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁（物体の速度）を変える" />
+              {canDrag && (
+                <>
+                  <Handle at={v2Handle} r={px(11)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れの速度）を変える。上下左右にだけ動く" />
+                  <Handle at={v1Tip} r={px(11)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁（物体の速度）を変える" />
+                </>
+              )}
               {placedLabels.map((pl) => (
                 <VecLabel key={pl.key} at={pl.center} font={font} {...labelTexts[pl.key]} />
               ))}

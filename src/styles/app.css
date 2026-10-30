@@ -260,6 +260,13 @@ input {
   font-weight: 700;
 }
 
+.accel-rows .sub-head th {
+  padding-top: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 .sum-rule td {
   padding: 0;
   border-top: 2px solid var(--text);
@@ -656,6 +663,23 @@ select {
 }
 
 @media (max-width: 599px) {
+  /* 成分表：行の名前を記号の下に回して、表が横にはみ出さないようにする */
+  .comp-table tbody th {
+    white-space: normal;
+  }
+  .comp-table .row-name {
+    display: block;
+    font-size: 0.72em;
+    line-height: 1.2;
+  }
+  .cell input,
+  .cell-ro {
+    width: 2.6em;
+    min-width: 2.6em;
+  }
+  .sign-btn {
+    min-width: 1.6em;
+  }
   .app-header,
   .panes,
   .playbar,

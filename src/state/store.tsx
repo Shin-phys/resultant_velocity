@@ -10,14 +10,21 @@ import {
   type Goal,
   type SimState,
 } from '../model/kinematics';
-import { add, equals, snap, type Vec } from '../model/vector';
+import { add, equals, isZero, snap, type Vec, ZERO } from '../model/vector';
 import type { Action, DisplayOptions, PlayStatus } from './actions';
 
 /** 成分の上限 [m/s]（仕様 05 §2） */
 export const V_MAX = 20;
 
 export interface AppState {
+  /** 物体の、媒質に対する速度（t = 0 の値） */
   v1: Vec;
+  /** 物体の、媒質に対する加速度（仕様 12） */
+  a1: Vec;
+  /** 媒質の加速度。流れの軸の成分だけ（仕様 12） */
+  a2: Vec;
+  /** 加速度を使う状態か（③に加速度の行を出す） */
+  accelOn: boolean;
   flowDir: FlowDir;
   flowSpeed: number;
   goal: Goal;
@@ -42,6 +49,8 @@ export interface AppState {
 export interface Crossing {
   v1: Vec;
   v2: Vec;
+  a1: Vec;
+  a2: Vec;
   /** 渡るのにかかった時間 [s] */
   t: number;
   /** 流れの方向に流された距離 [m]（流れの向きを正とする） */
@@ -52,6 +61,9 @@ export const CROSSING_MAX = 5;
 
 export const initialState: AppState = {
   v1: [0, 4],
+  a1: ZERO,
+  a2: ZERO,
+  accelOn: false,
   flowDir: 'right',
   flowSpeed: 3,
   goal: { kind: 'crossBank', width: 12 },
@@ -101,15 +113,18 @@ function recordCrossing(s: AppState): AppState {
   const v2 = v2Of(s);
   const along = acrossAxis(s.flowDir) === 1 ? 0 : 1;
   const sign = s.flowDir === 'left' || s.flowDir === 'down' ? -1 : 1;
-  const rec: Crossing = { v1: s.v1, v2, t: f.t, drift: f.pos[along] * sign };
+  const rec: Crossing = { v1: s.v1, v2, a1: s.a1, a2: s.a2, t: f.t, drift: f.pos[along] * sign };
   return { ...s, crossings: [rec, ...s.crossings].slice(0, CROSSING_MAX) };
 }
 
-/** 流れを変える。川の向き（横・縦）が変わるときは最初からやり直す。 */
+/** a₂ を流れの軸にそろえる（もう一方の成分は 0） */
+const alongFlow = (v: Vec, dir: FlowDir): Vec => (acrossAxis(dir) === 1 ? [v[0], 0] : [0, v[1]]);
+
+/** 流れを変える。川の向き（横・縦）が変わるときは最初からやり直し、a₂ は 0 に戻す。 */
 function changeFlow(s: AppState, dir: FlowDir, speed: number): AppState {
   if (dir === s.flowDir && speed === s.flowSpeed) return s;
   const next = { ...s, flowDir: dir, flowSpeed: speed, presetId: null };
-  return acrossAxis(dir) !== acrossAxis(s.flowDir) ? resetSim(next) : afterVelocityChange(next);
+  return acrossAxis(dir) !== acrossAxis(s.flowDir) ? resetSim({ ...next, a2: ZERO }) : afterVelocityChange(next);
 }
 
 export function reducer(s: AppState, a: Action): AppState {
@@ -119,6 +134,16 @@ export function reducer(s: AppState, a: Action): AppState {
       // ドラッグ中は同じ値が何度も届くので、変わらないときは何もしない
       if (equals(v1, s.v1)) return s;
       return afterVelocityChange({ ...s, v1, presetId: null });
+    }
+    case 'setA1': {
+      const a1 = clampVec(a.v);
+      if (equals(a1, s.a1)) return s;
+      return afterVelocityChange({ ...s, a1, presetId: null });
+    }
+    case 'setA2': {
+      const a2 = alongFlow(clampVec(a.v), s.flowDir);
+      if (equals(a2, s.a2)) return s;
+      return afterVelocityChange({ ...s, a2, presetId: null });
     }
     case 'setV2': {
       const v = axisAlign(clampVec(a.v));
@@ -147,17 +172,23 @@ export function reducer(s: AppState, a: Action): AppState {
       return { ...s, speed: a.speed };
     case 'tick': {
       if (s.status !== 'playing') return s;
-      const sim = stepSim(s.sim, s.v1, v2Of(s), a.dt * s.speed, s.goal, s.flowDir);
+      const sim = stepSim(s.sim, s.v1, v2Of(s), a.dt * s.speed, s.goal, s.flowDir, s.a1, s.a2);
       const next: AppState = { ...s, sim, status: sim.finished ? 'finished' : 'playing' };
       return sim.finished ? recordCrossing(next) : next;
     }
     case 'loadPreset': {
       const v2 = axisAlign(clampVec(a.v2));
-      const { dir, speed } = flowFromVector(v2, s.flowDir);
+      const a2in = axisAlign(clampVec(a.a2 ?? ZERO));
+      // 流れが止まっている例（v₂ = 0）では、流れの向きを a₂ の向きから決める
+      const { dir } = flowFromVector(isZero(v2) && !isZero(a2in) ? a2in : v2, s.flowDir);
+      const speed = Math.abs(v2[0]) + Math.abs(v2[1]);
       // 別の例を選んだら、v はまた隠す
       return resetSim({
         ...s,
         v1: clampVec(a.v1),
+        a1: clampVec(a.a1 ?? ZERO),
+        a2: alongFlow(a2in, dir),
+        accelOn: a.accel ?? false,
         flowDir: dir,
         flowSpeed: speed,
         goal: a.goal,
