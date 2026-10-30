@@ -29,9 +29,14 @@ function Layout() {
   const s = useAppState();
   const dispatch = useDispatch();
   useContinuousPlayback(s.status, dispatch);
-  // 再生が終わったら合成速度 v を出す（仕様 06「合成速度 v を出すタイミング」）
+  // 再生が終わった瞬間に合成速度 v を出す（仕様 06「合成速度 v を出すタイミング」）。
+  // 終わったあとに「v を隠す」を押したときは出し直さない
+  const prevStatus = useRef(s.status);
   useEffect(() => {
-    if (s.status === 'finished' && !s.vShown) dispatch({ type: 'revealV', at: performance.now() });
+    if (s.status === 'finished' && prevStatus.current !== 'finished' && !s.vShown) {
+      dispatch({ type: 'revealV', at: performance.now() });
+    }
+    prevStatus.current = s.status;
   }, [s.status, s.vShown, dispatch]);
   const narrow = useMediaQuery(NARROW_QUERY);
   const [tab, setTab] = useState<Tab>('vector');

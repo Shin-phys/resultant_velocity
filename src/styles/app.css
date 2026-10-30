@@ -365,6 +365,101 @@ input {
   font-weight: 700;
 }
 
+.btn.small.quiet {
+  border-color: var(--border);
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* ---- ① 経過時間と渡った記録 ---- */
+.timer {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.timer-label {
+  font-size: 0.75em;
+  color: var(--muted);
+}
+
+.timer-value {
+  font-size: 1.35em;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer.done {
+  border-color: var(--c-v);
+}
+
+.timer.done .timer-value {
+  color: var(--c-v);
+}
+
+.crossing-log {
+  flex: none;
+  border-top: 1px solid var(--border);
+  padding: 6px 10px 8px;
+}
+
+.crossing-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.crossing-head .btn {
+  margin-left: auto;
+}
+
+.crossing-scroll {
+  overflow-x: auto;
+  max-height: 9.5em;
+  overflow-y: auto;
+}
+
+.crossing-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+.crossing-table th,
+.crossing-table td {
+  padding: 2px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.crossing-table th {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.crossing-table th.c-v1,
+.crossing-table th.c-v2 {
+  color: inherit;
+}
+
+.crossing-table tbody tr:first-child td {
+  font-weight: 700;
+}
+
+.crossing-t {
+  color: var(--c-v);
+  font-weight: 700;
+}
+
 .btn.icon {
   min-width: 34px;
   padding: 4px 6px;
@@ -429,15 +524,6 @@ select {
 .preset select {
   width: 100%;
   max-width: 17em;
-}
-
-.mags {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  font-size: 0.85em;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
 .menu-body hr {
@@ -528,12 +614,6 @@ select {
 
 .play {
   min-width: 8.5em;
-}
-
-.time {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  margin-left: auto;
 }
 
 .statusbar {

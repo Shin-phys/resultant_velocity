@@ -6,7 +6,7 @@ import { useAppState, useDispatch } from '../state/store';
 const DISPLAY_ITEMS: { key: keyof DisplayOptions; label: string }[] = [
   { key: 'sceneArrows', label: '① 速度の矢印' },
   { key: 'trails', label: '① 通った跡' },
-  { key: 'magnitudes', label: '② 大きさの数値' },
+  { key: 'magnitudes', label: '①② 矢印の大きさの数値' },
   { key: 'components', label: '② 成分の点線' },
   { key: 'parallelogram', label: '② 平行四辺形' },
 ];

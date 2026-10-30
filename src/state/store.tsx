@@ -32,7 +32,23 @@ export interface AppState {
   vShown: boolean;
   /** v を出し始めた時刻（アニメーション用）。null ならアニメーションなしで出す */
   revealAt: number | null;
+  /** 再生の途中で速度を変えたか（変えた回は渡った記録に残さない） */
+  runChanged: boolean;
+  /** 向こう岸まで渡った記録（新しい順、最大 CROSSING_MAX 件。仕様 07 §5） */
+  crossings: Crossing[];
 }
+
+/** 渡った記録1件 */
+export interface Crossing {
+  v1: Vec;
+  v2: Vec;
+  /** 渡るのにかかった時間 [s] */
+  t: number;
+  /** 流れの方向に流された距離 [m]（流れの向きを正とする） */
+  drift: number;
+}
+
+export const CROSSING_MAX = 5;
 
 export const initialState: AppState = {
   v1: [0, 4],
@@ -53,6 +69,8 @@ export const initialState: AppState = {
   presetId: 'straight',
   vShown: false,
   revealAt: null,
+  runChanged: false,
+  crossings: [],
 };
 
 const clampInt = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n) || 0));
@@ -69,10 +87,23 @@ export const vOf = (s: AppState): Vec => add(s.v1, v2Of(s));
 
 /** 速度を変えたとき：再生が終わっていたら最初に戻す（再生中・一時停止中はそのまま続ける）。 */
 function afterVelocityChange(s: AppState): AppState {
-  return s.status === 'finished' ? { ...s, status: 'idle', sim: initialSim() } : s;
+  if (s.status === 'finished') return { ...s, status: 'idle', sim: initialSim(), runChanged: false };
+  // 再生の途中で変えた回は、渡った時間が速度の組み合わせと対応しないので記録しない
+  return s.sim.t > 0 ? { ...s, runChanged: true } : s;
 }
 
-const resetSim = (s: AppState): AppState => ({ ...s, status: 'idle', sim: initialSim() });
+const resetSim = (s: AppState): AppState => ({ ...s, status: 'idle', sim: initialSim(), runChanged: false });
+
+/** 向こう岸まで渡り終えた回を記録に足す */
+function recordCrossing(s: AppState): AppState {
+  const f = s.sim.finished;
+  if (!f || f.reason !== 'bank' || s.goal.kind !== 'crossBank' || s.runChanged) return s;
+  const v2 = v2Of(s);
+  const along = acrossAxis(s.flowDir) === 1 ? 0 : 1;
+  const sign = s.flowDir === 'left' || s.flowDir === 'down' ? -1 : 1;
+  const rec: Crossing = { v1: s.v1, v2, t: f.t, drift: f.pos[along] * sign };
+  return { ...s, crossings: [rec, ...s.crossings].slice(0, CROSSING_MAX) };
+}
 
 /** 流れを変える。川の向き（横・縦）が変わるときは最初からやり直す。 */
 function changeFlow(s: AppState, dir: FlowDir, speed: number): AppState {
@@ -106,7 +137,7 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'setPresentation':
       return { ...s, presentation: a.on };
     case 'play':
-      if (s.status === 'finished') return { ...s, status: 'playing', sim: initialSim() };
+      if (s.status === 'finished') return { ...s, status: 'playing', sim: initialSim(), runChanged: false };
       return { ...s, status: 'playing' };
     case 'pause':
       return s.status === 'playing' ? { ...s, status: 'paused' } : s;
@@ -117,7 +148,8 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'tick': {
       if (s.status !== 'playing') return s;
       const sim = stepSim(s.sim, s.v1, v2Of(s), a.dt * s.speed, s.goal, s.flowDir);
-      return { ...s, sim, status: sim.finished ? 'finished' : 'playing' };
+      const next: AppState = { ...s, sim, status: sim.finished ? 'finished' : 'playing' };
+      return sim.finished ? recordCrossing(next) : next;
     }
     case 'loadPreset': {
       const v2 = axisAlign(clampVec(a.v2));
@@ -134,6 +166,10 @@ export function reducer(s: AppState, a: Action): AppState {
         revealAt: null,
       });
     }
+    case 'hideV':
+      return s.vShown ? { ...s, vShown: false, revealAt: null } : s;
+    case 'clearCrossings':
+      return { ...s, crossings: [] };
     case 'revealV':
       return s.vShown ? s : { ...s, vShown: true, revealAt: a.at };
   }

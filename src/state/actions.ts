@@ -32,4 +32,8 @@ export type Action =
   | { type: 'tick'; dt: number }
   | { type: 'loadPreset'; id: string; v1: Vec; v2: Vec; goal: Goal }
   /** 合成速度 v を出す。at は出し始めた時刻（performance.now() の値） */
-  | { type: 'revealV'; at: number };
+  | { type: 'revealV'; at: number }
+  /** 合成速度 v をまた隠す（次の予想のため） */
+  | { type: 'hideV' }
+  /** 渡った記録を消す */
+  | { type: 'clearCrossings' };

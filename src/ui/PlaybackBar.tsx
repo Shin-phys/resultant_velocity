@@ -25,9 +25,6 @@ export function PlaybackBar() {
           </button>
         ))}
       </div>
-      <span className="time" aria-live="off">
-        t = {s.sim.t.toFixed(1)} s
-      </span>
     </div>
   );
 }

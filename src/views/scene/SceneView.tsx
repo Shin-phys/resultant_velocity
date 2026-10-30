@@ -6,8 +6,11 @@ import { riverSkin } from '../../skins/river';
 import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
 import { Handle } from '../common/Handle';
+import { circleRect, placeLabels, type LabelRequest, type Obstacle } from '../common/labelLayout';
 import { Arrow, fy, useElementSize } from '../common/svg';
+import { VecLabel, vecLabelRequest, vecLabelText, type VecLabelText } from '../common/VecLabel';
 import { useTipDrag } from '../common/useDrag';
+import { CrossingLog } from './CrossingLog';
 import { FlowControls } from './FlowControls';
 
 /** 目盛りの数字の間隔の候補 [m] */
@@ -111,9 +114,6 @@ export function SceneView() {
   const nrm = overlapNormal(v1, v2);
   const offV2: Vec = nrm ? scale(nrm, px(13)) : [0, 0];
   const offV: Vec = nrm ? scale(nrm, -px(13)) : [0, 0];
-  const shiftV1: Vec | undefined = nrm ? [0, 0] : undefined;
-  const shiftV2: Vec | undefined = nrm ? scale(nrm, font * 1.3) : undefined;
-  const shiftV: Vec | undefined = nrm ? scale(nrm, -font * 1.3) : undefined;
 
   const v1Tip = add(sim.pos, v1);
   const v2Tip = add(add(sim.pos, v2), offV2);
@@ -121,6 +121,34 @@ export function SceneView() {
   const flowU = FLOW_UNIT[flowDir];
   const zeroDir: Vec = isParallel(flowU, v1) && nrm ? nrm : flowU;
   const v2Handle: Vec = isZero(v2) ? add(sim.pos, scale(zeroDir, px(26))) : v2Tip;
+
+  // ---- 矢印のラベル（記号と大きさ）。矢印・つまみ・船・ほかのラベルと重ならない所に置く ----
+  const segV1: [Vec, Vec] = [sim.pos, v1Tip];
+  const segV2: [Vec, Vec] = [add(sim.pos, offV2), v2Tip];
+  const segV: [Vec, Vec] = [add(sim.pos, offV), add(add(sim.pos, scale(v, phase.draw)), offV)];
+  const vDone = s.vShown && phase.draw >= 1;
+  const drawnSegs: [Vec, Vec][] = [segV1, ...(isZero(v2) ? [] : [segV2]), ...(phase.draw > 0 ? [segV] : [])];
+  const tipsCenter: Vec = drawnSegs.reduce<Vec>((c, sg) => add(c, scale(sg[1], 1 / drawnSegs.length)), [0, 0]);
+  const sideOf = (sg: [Vec, Vec], shift: Vec | null): Vec =>
+    shift ?? sub([(sg[0][0] + sg[1][0]) / 2, (sg[0][1] + sg[1][1]) / 2], tipsCenter);
+  const labelReqs: LabelRequest[] = [];
+  const labelTexts: Record<string, { t: VecLabelText; color: string }> = {};
+  const addLabel = (key: string, t: VecLabelText, color: string, sg: [Vec, Vec], shift: Vec | null) => {
+    labelReqs.push(vecLabelRequest(key, t, font, sg[0], sg[1], sideOf(sg, shift), true, px(11)));
+    labelTexts[key] = { t, color };
+  };
+  if (vDone) addLabel('v', vecLabelText('v', v, display.magnitudes), 'var(--c-v)', segV, nrm && scale(nrm, -1));
+  addLabel('v1', vecLabelText('v₁', v1, display.magnitudes), 'var(--c-v1)', segV1, nrm);
+  if (!isZero(v2)) addLabel('v2', vecLabelText('v₂', v2, display.magnitudes), 'var(--c-v2)', segV2, nrm);
+  const labelObstacles: Obstacle[] = [
+    ...drawnSegs.map(([a, b]): Obstacle => ({ kind: 'seg', a, b })),
+    { kind: 'rect', r: circleRect(sim.pos, boatLen * 0.5) },
+    { kind: 'rect', r: circleRect(v1Tip, px(11)) },
+    { kind: 'rect', r: circleRect(v2Handle, px(11)) },
+  ];
+  const placedLabels = display.sceneArrows
+    ? placeLabels(labelReqs, labelObstacles, { x0: box.xMin, y0: box.yMin, x1: box.xMax, y1: box.yMax }, px(2))
+    : [];
 
   const freeze = { onStart: () => setFrozen(computed), onEnd: () => setFrozen(null) };
   const dragV1 = useTipDrag(
@@ -147,6 +175,7 @@ export function SceneView() {
       <header className="pane-head">
         <h2>① イメージ図</h2>
         <FlowControls />
+        <Timer />
       </header>
       <div
         className="scene-box"
@@ -261,26 +290,43 @@ export function SceneView() {
           {/* 速度の矢印（1 m/s を 1 m の長さで描く） */}
           {display.sceneArrows && (
             <g>
-              <Arrow from={add(sim.pos, offV2)} to={v2Tip} color="var(--c-v2)" width={3 * k} head={head} label="v₂" fontSize={font} labelShift={shiftV2} />
-              <Arrow from={sim.pos} to={v1Tip} color="var(--c-v1)" width={3 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={nrm ? add(add(sim.pos, scale(v1, 0.5)), scale(nrm, font * 1.2)) : undefined} />
-              {phase.draw > 0 && (
-                <Arrow
-                  from={add(sim.pos, offV)}
-                  to={add(add(sim.pos, scale(v, phase.draw)), offV)}
-                  color="var(--c-v)"
-                  width={4 * k}
-                  head={head * 1.1}
-                  label={phase.draw >= 1 ? 'v' : undefined}
-                  fontSize={font}
-                  labelShift={shiftV}
-                />
-              )}
+              <Arrow from={segV2[0]} to={segV2[1]} color="var(--c-v2)" width={3 * k} head={head} />
+              <Arrow from={segV1[0]} to={segV1[1]} color="var(--c-v1)" width={3 * k} head={head} />
+              {phase.draw > 0 && <Arrow from={segV[0]} to={segV[1]} color="var(--c-v)" width={4 * k} head={head * 1.1} />}
               <Handle at={v2Handle} r={px(11)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れの速度）を変える。上下左右にだけ動く" />
               <Handle at={v1Tip} r={px(11)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁（物体の速度）を変える" />
+              {placedLabels.map((pl) => (
+                <VecLabel key={pl.key} at={pl.center} font={font} {...labelTexts[pl.key]} />
+              ))}
             </g>
           )}
         </svg>
       </div>
+      <CrossingLog />
     </section>
+  );
+}
+
+/**
+ * 経過時間の表示（仕様 07 §5）。向こう岸に着いたら、渡るのにかかった時間として止める。
+ */
+function Timer() {
+  const s = useAppState();
+  const f = s.sim.finished;
+  const crossed = f?.reason === 'bank' && s.goal.kind === 'crossBank';
+  return (
+    <div className={`timer${crossed ? ' done' : ''}`} aria-live="off" role="timer">
+      {crossed ? (
+        <>
+          <span className="timer-label">向こう岸まで</span>
+          <span className="timer-value">{f.t.toFixed(1)} s</span>
+        </>
+      ) : (
+        <>
+          <span className="timer-label">経過時間</span>
+          <span className="timer-value">{s.sim.t.toFixed(1)} s</span>
+        </>
+      )}
+    </div>
   );
 }

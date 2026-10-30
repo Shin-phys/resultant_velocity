@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { axisAlign, FLOW_UNIT } from '../../model/kinematics';
-import { add, clampBox, formatLength, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
+import { add, clampBox, formatComponent, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
 import { Handle } from '../common/Handle';
-import { Arrow, outsideMidpoint, useElementSize } from '../common/svg';
+import { circleRect, placeLabels, besideSegment, type LabelRequest, type Obstacle } from '../common/labelLayout';
+import { Arrow, useElementSize } from '../common/svg';
+import { VecLabel, vecLabelRequest, vecLabelText, type VecLabelText } from '../common/VecLabel';
 import { useTipDrag } from '../common/useDrag';
 
 /** 方眼の最小の範囲 [m/s]（仕様 04 §1） */
@@ -60,13 +62,6 @@ export function VectorView() {
   const nrm = overlapNormal(v1, v2);
   const offV2: Vec = nrm ? scale(nrm, OFFSET) : [0, 0];
   const offV: Vec = nrm ? scale(nrm, -OFFSET) : [0, 0];
-  const shiftV1: Vec | undefined = nrm ? [0, 0] : undefined;
-  const shiftV2: Vec | undefined = nrm ? scale(nrm, font * 1.3) : undefined;
-  const shiftV: Vec | undefined = nrm ? scale(nrm, -font * 1.3) : undefined;
-  // 三角形になるときは、各辺の中点の外側にラベルを置く（先端どうしが重なってもラベルは重ならない）
-  const centroid: Vec = [(v1[0] + v[0]) / 3, (v1[1] + v[1]) / 3];
-  const lab = (from: Vec, to: Vec): Vec | undefined =>
-    nrm || !done ? undefined : outsideMidpoint(from, to, centroid, font * 0.9);
 
   // v₂ = 0 のときのつまみ：v₁ の先から流れの向き（v₁ と平行ならその横）に少し離して置く
   const flowU = FLOW_UNIT[s.flowDir];
@@ -89,22 +84,73 @@ export function VectorView() {
 
   const { magnitudes, components, parallelogram } = s.display;
 
+  // ---- 図の中のラベル（記号と大きさ。仕様 04 §5）----
+  // 描いている矢印（ずらした位置）
+  const segV1: [Vec, Vec] = [[0, 0], v1];
+  const segV2: [Vec, Vec] = [add(v2Base, offV2), add(v2End, offV2)];
+  const segV: [Vec, Vec] = [offV, add(scale(v, phase.draw), offV)];
+  const drawn: [Vec, Vec][] = [segV1, segV2, ...(phase.draw > 0 ? [segV] : [])];
+  const mid = (sg: [Vec, Vec]): Vec => [(sg[0][0] + sg[1][0]) / 2, (sg[0][1] + sg[1][1]) / 2];
+  const center: Vec = drawn.reduce<Vec>((c, sg) => add(c, scale(mid(sg), 1 / drawn.length)), [0, 0]);
+  /** 先に試す側：同一直線上ならずらした側、そうでなければ図の中心から離れる側 */
+  const sideOf = (sg: [Vec, Vec], shift: Vec | null): Vec => shift ?? sub(mid(sg), center);
+  const tV1 = vecLabelText('v₁', v1, magnitudes);
+  const tV2 = vecLabelText('v₂', v2, magnitudes);
+  const tV = vecLabelText('v', v, magnitudes);
+  const reqs: LabelRequest[] = [];
+  const texts: Record<string, { t: VecLabelText; color: string; font: number }> = {};
+  if (done) {
+    reqs.push(vecLabelRequest('v', tV, font, segV[0], segV[1], sideOf(segV, nrm && scale(nrm, -1))));
+    texts.v = { t: tV, color: 'var(--c-v)', font };
+  }
+  reqs.push(vecLabelRequest('v1', tV1, font, segV1[0], segV1[1], sideOf(segV1, nrm)));
+  texts.v1 = { t: tV1, color: 'var(--c-v1)', font };
+  if (!isZero(v2)) {
+    reqs.push(vecLabelRequest('v2', tV2, font, segV2[0], segV2[1], sideOf(segV2, nrm)));
+    texts.v2 = { t: tV2, color: 'var(--c-v2)', font };
+  }
+  // 成分の点線には成分の値を添える
+  if (components) {
+    const cf = font * 0.8;
+    const comp = (key: string, vec: Vec, color: string) => {
+      const parts: [Vec, Vec, number][] = [
+        [[0, 0], [vec[0], 0], vec[0]],
+        [[vec[0], 0], vec, vec[1]],
+      ];
+      parts.forEach(([a, b, val], i) => {
+        if (val === 0) return;
+        const t: VecLabelText = { sym: formatComponent(val), value: null };
+        const w = cf * (0.6 * t.sym.length + 0.4);
+        const h = cf * 1.15;
+        reqs.push({ key: `${key}${i}`, w, h, candidates: besideSegment(a, b, w, h, cf * 0.25, sub(mid([a, b]), center)) });
+        texts[`${key}${i}`] = { t, color, font: cf };
+      });
+    };
+    comp('c1', v1, 'var(--c-v1)');
+    if (s.vShown) comp('cv', v, 'var(--c-v)');
+  }
+  const handleR = px(12);
+  const obstacles: Obstacle[] = [
+    ...drawn.map(([a, b]): Obstacle => ({ kind: 'seg', a, b })),
+    { kind: 'rect', r: circleRect(v1, handleR) },
+    { kind: 'rect', r: circleRect(v2Handle, handleR) },
+    { kind: 'rect', r: circleRect([0, 0], px(5)) },
+  ];
+  const placed = placeLabels(reqs, obstacles, { x0: -R - PAD, y0: -R - PAD, x1: R + PAD, y1: R + PAD }, px(2));
+
   return (
     <section className="pane vector-pane" aria-label="② ベクトル図">
       <header className="pane-head">
         <h2>② ベクトル図</h2>
         <span className="hint">1マス＝1 m/s</span>
-        {!s.vShown && (
+        {s.vShown ? (
+          <button className="btn small quiet" onClick={() => dispatch({ type: 'hideV' })} title="次の予想のために v をまた隠す">
+            v を隠す
+          </button>
+        ) : (
           <button className="btn small" onClick={() => dispatch({ type: 'revealV', at: performance.now() })}>
             v を表示
           </button>
-        )}
-        {magnitudes && (
-          <span className="mags" aria-label="大きさ">
-            <span className="c-v1">|v₁| = {formatLength(v1)}</span>
-            <span className="c-v2">|v₂| = {formatLength(v2)}</span>
-            <span className="c-v">|v| = {s.vShown ? formatLength(v) : '？'}</span>
-          </span>
         )}
       </header>
       <div className="vector-box" ref={boxRef}>
@@ -152,36 +198,20 @@ export function VectorView() {
             </g>
           )}
 
-          <Arrow from={[0, 0]} to={v1} color="var(--c-v1)" width={3.5 * k} head={head} label="v₁" fontSize={font} labelShift={shiftV1} labelAt={nrm ? add(scale(v1, 0.5), scale(nrm, font)) : lab([0, 0], v1)} />
-          <Arrow
-            from={add(v2Base, offV2)}
-            to={add(v2End, offV2)}
-            color="var(--c-v2)"
-            width={3.5 * k}
-            head={head}
-            label="v₂"
-            fontSize={font}
-            labelShift={shiftV2}
-            labelAt={lab(v1, v)}
-          />
+          <Arrow from={segV1[0]} to={segV1[1]} color="var(--c-v1)" width={3.5 * k} head={head} />
+          <Arrow from={segV2[0]} to={segV2[1]} color="var(--c-v2)" width={3.5 * k} head={head} />
           {/* 再生中は v を明滅させ、① の地面に対する軌跡と同じ向きだと気づかせる（仕様 04 §6） */}
           {phase.draw > 0 && (
             <g className={s.status === 'playing' ? 'pulse' : undefined}>
-              <Arrow
-                from={offV}
-                to={add(scale(v, phase.draw), offV)}
-                color="var(--c-v)"
-                width={5 * k}
-                head={head * 1.15}
-                label={done ? 'v' : undefined}
-                fontSize={font}
-                labelShift={shiftV}
-                labelAt={lab([0, 0], v)}
-              />
+              <Arrow from={segV[0]} to={segV[1]} color="var(--c-v)" width={5 * k} head={head * 1.15} />
             </g>
           )}
 
           <circle className="origin" cx={0} cy={0} r={px(4)} />
+
+          {placed.map((pl) => (
+            <VecLabel key={pl.key} at={pl.center} {...texts[pl.key]} />
+          ))}
 
           <Handle at={v2Handle} r={px(12)} color="var(--c-v2)" zero={isZero(v2)} drag={dragV2} title="ドラッグで v₂（流れ）を変える。上下左右にだけ動く" />
           <Handle at={v1} r={px(12)} color="var(--c-v1)" drag={dragV1} title="ドラッグで v₁ を変える" />
