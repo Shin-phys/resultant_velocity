@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { acrossAxis, banks, FLOW_UNIT } from '../../model/kinematics';
+import { acrossAxis, banks, computeEnd, FLOW_UNIT } from '../../model/kinematics';
 import { fitAspect, viewportFor } from '../../model/viewport';
 import { add, isParallel, isZero, overlapNormal, scale, snap, sub, type Vec } from '../../model/vector';
 import { riverSkin } from '../../skins/river';
 import { useRevealPhase } from '../../playback/reveal';
 import { useAppState, useDispatch, v2Of } from '../../state/store';
 import { Handle } from '../common/Handle';
-import { circleRect, placeLabels, type LabelRequest, type Obstacle } from '../common/labelLayout';
+import { circleRect, placeLabels, rectAt, textEm, type LabelRequest, type Obstacle } from '../common/labelLayout';
 import { Arrow, fy, useElementSize } from '../common/svg';
 import { VecLabel, vecLabelRequest, vecLabelText, type VecLabelText } from '../common/VecLabel';
 import { useTipDrag } from '../common/useDrag';
@@ -140,7 +140,36 @@ export function SceneView() {
   if (vDone) addLabel('v', vecLabelText('v', v, display.magnitudes), 'var(--c-v)', segV, nrm && scale(nrm, -1));
   addLabel('v1', vecLabelText('v₁', v1, display.magnitudes), 'var(--c-v1)', segV1, nrm);
   if (!isZero(v2)) addLabel('v2', vecLabelText('v₂', v2, display.magnitudes), 'var(--c-v2)', segV2, nrm);
+  // ---- 川幅の寸法線（仕様 03 §1）。船が流される側とは反対の端に置く ----
+  const dimFont = font * 0.85;
+  const dimText = `川幅 ${goal.width} m`;
+  const dimW = textEm(dimText) * dimFont + dimFont * 0.4;
+  const dimH = dimFont * 1.2;
+  const endAlong = computeEnd(v, goal, flowDir).pos[b];
+  const atMin = endAlong >= 0; // 流されるのが + 側なら − 側の端に置く
+  const edgeIn = font * 1.4; // 画面の端から寸法線までの距離
+  const dim = (() => {
+    const p1: [number, number] = [0, 0];
+    const p2: [number, number] = [0, 0];
+    const along = b === 0 ? (atMin ? box.xMin + edgeIn : box.xMax - edgeIn) : atMin ? box.yMin + edgeIn : box.yMax - edgeIn;
+    p1[b] = along;
+    p2[b] = along;
+    p1[a] = lo;
+    p2[a] = hi;
+    const mid: [number, number] = [0, 0];
+    mid[b] = along;
+    mid[a] = (lo + hi) / 2;
+    // ラベル：横向きの川なら線の右（左）、縦向きの川なら線の上（下）
+    const c: Vec =
+      b === 0
+        ? [along + (atMin ? 1 : -1) * (dimW / 2 + font * 0.35), mid[1]]
+        : [mid[0], along + (atMin ? 1 : -1) * (dimH / 2 + font * 0.3)];
+    return { p1: p1 as Vec, p2: p2 as Vec, mid: mid as Vec, label: c };
+  })();
+
   const labelObstacles: Obstacle[] = [
+    { kind: 'seg', a: dim.p1, b: dim.p2 },
+    { kind: 'rect', r: rectAt(dim.label, dimW, dimH) },
     ...drawnSegs.map(([a, b]): Obstacle => ({ kind: 'seg', a, b })),
     { kind: 'rect', r: circleRect(sim.pos, boatLen * 0.5) },
     { kind: 'rect', r: circleRect(v1Tip, px(11)) },
@@ -236,6 +265,25 @@ export function SceneView() {
               {l.text}
             </text>
           ))}
+
+          {/* 川幅の寸法線 */}
+          <g className="dimension" aria-label={dimText}>
+            <Arrow from={dim.mid} to={dim.p1} color="var(--muted)" width={1.5 * k} head={px(9)} />
+            <Arrow from={dim.mid} to={dim.p2} color="var(--muted)" width={1.5 * k} head={px(9)} />
+            <text
+              x={fy(dim.label)[0]}
+              y={fy(dim.label)[1]}
+              fontSize={dimFont}
+              fill="var(--text)"
+              fontWeight={700}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="svg-label"
+              style={{ strokeWidth: dimFont * 0.25, vectorEffect: 'none' }}
+            >
+              {dimText}
+            </text>
+          </g>
 
           {/* 出発点 */}
           <circle cx={0} cy={0} r={px(5)} fill="none" stroke="var(--text)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
